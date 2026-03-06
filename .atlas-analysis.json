@@ -1,0 +1,163 @@
+{
+  "projectType": "saas",
+  "projectName": "Gima AI Chatbot",
+  "projectDescription": "AI-powered chatbot for asset and maintenance management at Universidad Nacional Experimental de Guayana (UNEG)",
+  "theme": "palm",
+  "primaryColor": "#153b98",
+  "lightColor": "#849cc4",
+  "darkColor": "#d3dae7",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/multimodal-chat",
+              "features/voice-commands",
+              "features/image-analysis",
+              "features/pdf-processing"
+            ]
+          },
+          {
+            "group": "AI Tools",
+            "pages": [
+              "ai-tools/overview",
+              "ai-tools/checklist-builder",
+              "ai-tools/activity-summaries",
+              "ai-tools/work-order-closeout",
+              "ai-tools/data-transformation"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/configuration",
+              "guides/ai-models",
+              "guides/backend-integration",
+              "guides/testing"
+            ]
+          },
+          {
+            "group": "Architecture",
+            "pages": [
+              "architecture/overview",
+              "architecture/project-structure",
+              "architecture/components"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "API Routes",
+            "pages": [
+              "api-reference/chat",
+              "api-reference/rate-limiting"
+            ]
+          },
+          {
+            "group": "Server Actions",
+            "pages": [
+              "api-reference/actions/voice",
+              "api-reference/actions/vision",
+              "api-reference/actions/files",
+              "api-reference/actions/authentication"
+            ]
+          },
+          {
+            "group": "Services",
+            "pages": [
+              "api-reference/services/chat-service",
+              "api-reference/services/backend-api",
+              "api-reference/services/ai-services"
+            ]
+          },
+          {
+            "group": "AI Tools",
+            "pages": [
+              "api-reference/tools/chat-tools",
+              "api-reference/tools/schemas"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Components",
+        "groups": [
+          {
+            "group": "Chat Components",
+            "pages": [
+              "components/chat/chat",
+              "components/chat/message",
+              "components/chat/input"
+            ]
+          },
+          {
+            "group": "Voice Components",
+            "pages": [
+              "components/voice/voice-button",
+              "components/voice/command-mode",
+              "components/voice/audio-waveform"
+            ]
+          },
+          {
+            "group": "AI Elements",
+            "pages": [
+              "components/ai-elements/generative-tables",
+              "components/ai-elements/tool-cards"
+            ]
+          },
+          {
+            "group": "Hooks",
+            "pages": [
+              "components/hooks/use-chat",
+              "components/hooks/use-voice",
+              "components/hooks/use-file-submission"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Multimodal chat with text, voice, and image support",
+    "Voice commands for work order management",
+    "AI-powered image analysis with Gemini Vision",
+    "PDF content extraction and analysis",
+    "Generative UI with interactive data tables",
+    "Checklist builder for maintenance tasks",
+    "Activity summaries and work order closeout",
+    "Backend integration with Laravel API",
+    "Multiple AI models (GROQ LLaMA, Google Gemini)",
+    "Persistent chat history with localStorage"
+  ],
+  "publicApiSurface": [
+    "POST /api/chat",
+    "transcribeAudio()",
+    "analyzeImage()",
+    "processFileContent()",
+    "getAuthToken()",
+    "loginSilent()",
+    "ChatService",
+    "BackendAPIService",
+    "ChecklistAIService",
+    "ActivitySummaryAIService",
+    "WorkOrderCloseoutAIService",
+    "chat tools (query_backend, generate_checklist, generate_summary)",
+    "useChat hook",
+    "useVoiceSystem hook",
+    "useFileSubmission hook"
+  ]
+}

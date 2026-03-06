@@ -1,0 +1,523 @@
+---
+title: ChatInputArea Component
+description: User input area with text, file attachments, voice input, and quick action tools
+icon: message-circle-plus
+---
+
+## Overview
+
+The `ChatInputArea` component provides a rich input interface for users to interact with the chat system. It includes text input, file attachments (images and PDFs), voice input, and quick action tools.
+
+## Features
+
+- **Textarea Input**: Auto-resizing textarea for text messages
+- **File Attachments**: Drag-and-drop support for images and PDFs
+- **Voice Input**: Integrated voice button with dual-mode support (Gemini AI / native)
+- **Quick Actions**: Dropdown menu with AI-powered shortcuts
+- **Global Drop Zone**: Drop files anywhere on the page
+- **Keyboard Shortcuts**: Submit with Cmd/Ctrl+Enter
+- **Status-Aware**: Disabled during processing states
+
+## Props
+
+```typescript
+interface ChatInputAreaProps {
+  /** Reference to the textarea element for programmatic control */
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+  
+  /** Current input value */
+  input: string;
+  
+  /** Callback when input text changes */
+  onInputChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  
+  /** Callback when message is submitted */
+  onSubmit: (message: PromptInputMessage) => void;
+  
+  /** Whether sending is allowed (based on chat status) */
+  canSend: boolean;
+  
+  /** Current chat status */
+  status: 'ready' | 'streaming' | 'submitted' | 'error';
+  
+  /** Whether a file is being analyzed */
+  isAnalyzingFile: boolean;
+  
+  /** Props to pass to the VoiceButton component */
+  voiceProps: VoiceButtonProps;
+  
+  /** Optional callback for quick action selection */
+  onQuickAction?: (prompt: string) => void;
+}
+```
+
+### VoiceButtonProps
+
+```typescript
+interface VoiceButtonProps {
+  /** Whether voice recording is currently active */
+  isListening: boolean;
+  
+  /** Whether voice is being processed by AI */
+  isProcessing: boolean;
+  
+  /** Whether voice input is supported in the browser */
+  isSupported: boolean;
+  
+  /** Current voice recognition mode */
+  mode: 'gemini' | 'native';
+  
+  /** Callback to toggle voice recording */
+  onClick: () => void;
+  
+  /** Whether the button should be disabled */
+  disabled?: boolean;
+}
+```
+
+### PromptInputMessage
+
+```typescript
+interface PromptInputMessage {
+  /** Message text content */
+  text: string;
+  
+  /** Attached files (images, PDFs) */
+  files: File[];
+}
+```
+
+## Usage
+
+### Basic Example
+
+```tsx
+import { ChatInputArea } from '@/app/components/features/chat/chat-input-area';
+import { useRef, useState } from 'react';
+
+function ChatInterface() {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [input, setInput] = useState('');
+  const [status, setStatus] = useState<'ready'>('ready');
+
+  const handleSubmit = (message: PromptInputMessage) => {
+    console.log('Submitting:', message.text, message.files);
+    // Send message to API
+  };
+
+  return (
+    <ChatInputArea
+      textareaRef={textareaRef}
+      input={input}
+      onInputChange={(e) => setInput(e.target.value)}
+      onSubmit={handleSubmit}
+      canSend={status === 'ready' && input.trim().length > 0}
+      status={status}
+      isAnalyzingFile={false}
+      voiceProps={{
+        isListening: false,
+        isProcessing: false,
+        isSupported: true,
+        mode: 'gemini',
+        onClick: () => console.log('Toggle voice'),
+        disabled: false,
+      }}
+    />
+  );
+}
+```
+
+### With Voice Input
+
+```tsx
+import { useVoiceInput } from '@/app/hooks/use-voice-input';
+
+function ChatWithVoice() {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [input, setInput] = useState('');
+
+  const updateTextareaValue = useCallback((value: string) => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement.prototype,
+        'value'
+      )?.set;
+      nativeInputValueSetter?.call(textarea, value);
+      const event = new Event('input', { bubbles: true });
+      textarea.dispatchEvent(event);
+    }
+    setInput(value);
+  }, []);
+
+  const {
+    isListening,
+    isProcessing,
+    isSupported,
+    mode,
+    toggleListening,
+  } = useVoiceInput({ onTranscript: updateTextareaValue });
+
+  return (
+    <ChatInputArea
+      textareaRef={textareaRef}
+      input={input}
+      onInputChange={(e) => setInput(e.target.value)}
+      onSubmit={handleSubmit}
+      canSend={true}
+      status="ready"
+      isAnalyzingFile={false}
+      voiceProps={{
+        isListening,
+        isProcessing,
+        isSupported,
+        mode,
+        onClick: toggleListening,
+        disabled: false,
+      }}
+    />
+  );
+}
+```
+
+### With Quick Actions
+
+```tsx
+import { QUICK_ACTIONS } from '@/app/components/features/chat/chat-quick-actions';
+
+function ChatWithQuickActions() {
+  const handleQuickAction = useCallback((prompt: string) => {
+    const action = QUICK_ACTIONS.find((a) => a.prompt === prompt);
+
+    if (action?.formFields?.length > 0) {
+      // Show inline form
+      setActiveQuickAction(action);
+    } else if (!prompt.endsWith(' ')) {
+      // Complete prompt - send directly
+      handleSubmit({ text: prompt, files: [] });
+    } else {
+      // Incomplete prompt - populate input
+      setInput(prompt);
+      textareaRef.current?.focus();
+    }
+  }, []);
+
+  return (
+    <ChatInputArea
+      // ... other props
+      onQuickAction={handleQuickAction}
+    />
+  );
+}
+```
+
+## Component Structure
+
+The ChatInputArea uses the `PromptInput` primitive components:
+
+```tsx
+<PromptInput
+  onSubmit={onSubmit}
+  globalDrop
+  multiple={false}
+  maxFiles={1}
+  accept="image/*,application/pdf"
+>
+  <PromptInputHeader>
+    <PromptInputAttachments>
+      {(attachment) => <PromptInputAttachment data={attachment} />}
+    </PromptInputAttachments>
+  </PromptInputHeader>
+
+  <PromptInputBody>
+    <PromptInputTextarea
+      ref={textareaRef}
+      onChange={onInputChange}
+      placeholder="Escribe tu pregunta o sube imágenes/PDFs..."
+    />
+  </PromptInputBody>
+
+  <PromptInputFooter>
+    <PromptInputTools>
+      {/* Quick Actions Menu */}
+      <PromptInputActionMenu>
+        <PromptInputActionMenuTrigger />
+        <PromptInputActionMenuContent>
+          {/* Quick action items */}
+          <PromptInputActionAddAttachments />
+        </PromptInputActionMenuContent>
+      </PromptInputActionMenu>
+
+      {/* Voice Button */}
+      <VoiceButton {...voiceProps} />
+    </PromptInputTools>
+
+    {/* Submit Button */}
+    <PromptInputSubmit disabled={!canSend} status={status} />
+  </PromptInputFooter>
+</PromptInput>
+```
+
+## File Attachments
+
+### Supported File Types
+
+- **Images**: `image/*` (JPEG, PNG, GIF, WebP, etc.)
+- **Documents**: `application/pdf`
+
+### Configuration
+
+```tsx
+<PromptInput
+  globalDrop          // Allow dropping files anywhere on page
+  multiple={false}    // Only one file at a time
+  maxFiles={1}        // Maximum 1 file
+  accept="image/*,application/pdf"
+>
+```
+
+### Attachment Display
+
+Attachments are displayed in the header section:
+
+```tsx
+<PromptInputHeader>
+  <PromptInputAttachments>
+    {(attachment) => <PromptInputAttachment data={attachment} />}
+  </PromptInputAttachments>
+</PromptInputHeader>
+```
+
+## Quick Actions
+
+Quick actions provide AI-powered shortcuts accessible from the `+` menu:
+
+```tsx
+<PromptInputActionMenu>
+  <PromptInputActionMenuTrigger />
+  <PromptInputActionMenuContent>
+    <DropdownMenuLabel className="text-xs">Herramientas</DropdownMenuLabel>
+    {QUICK_ACTIONS.map((action) => (
+      <PromptInputActionMenuItem
+        key={action.label}
+        onClick={() => onQuickAction(action.prompt)}
+        className="gap-2 cursor-pointer"
+      >
+        {action.icon}
+        <span>{action.label}</span>
+      </PromptInputActionMenuItem>
+    ))}
+    <PromptInputActionAddAttachments
+      label="Añadir fotos o archivos"
+      className="gap-2 cursor-pointer [&>svg]:!mr-0 [&>svg]:!size-3.5"
+    />
+  </PromptInputActionMenuContent>
+</PromptInputActionMenu>
+```
+
+### Available Quick Actions
+
+- **Ver Activos**: Query registered assets
+- **Generar Checklist**: Create maintenance checklists (with form)
+- **Stock Bajo**: Check low-stock items
+- **Mantenimientos**: View pending maintenance
+- **Resumir Actividad**: Summarize activity notes (with form)
+
+Quick actions provide shortcuts for common maintenance tasks and queries.
+
+## Voice Input Integration
+
+The voice button provides dual-mode voice recognition:
+
+```tsx
+<VoiceButton
+  isListening={isListening}      // Red pulsing indicator when active
+  isProcessing={isProcessing}    // Spinner when transcribing
+  isSupported={isSupported}      // Hidden if not supported
+  mode={mode}                    // 'gemini' or 'native'
+  onClick={toggleListening}      // Toggle recording
+  disabled={!canSend}            // Disabled during processing
+/>
+```
+
+### Voice Modes
+
+- **Gemini AI**: Cloud-based transcription with higher accuracy
+- **Native**: Browser Web Speech API (fallback)
+
+## Submit Button
+
+The submit button shows status-aware states:
+
+```tsx
+<PromptInputSubmit 
+  disabled={!canSend} 
+  status={status}  // 'ready' | 'streaming' | 'submitted' | 'error'
+/>
+```
+
+States:
+- **Ready**: Default send icon
+- **Streaming**: Animated sending indicator
+- **Submitted**: Loading spinner
+- **Error**: Error icon with red color
+
+## Textarea Behavior
+
+### Auto-resize
+
+The textarea automatically adjusts height based on content (managed by `PromptInputTextarea`).
+
+### Placeholder
+
+```tsx
+<PromptInputTextarea
+  placeholder="Escribe tu pregunta o sube imágenes/PDFs..."
+/>
+```
+
+### Programmatic Control
+
+Use the `textareaRef` to programmatically control the input:
+
+```typescript
+// Focus the textarea
+textareaRef.current?.focus();
+
+// Set value programmatically (e.g., from voice input)
+const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+  window.HTMLTextAreaElement.prototype,
+  'value'
+)?.set;
+nativeInputValueSetter?.call(textareaRef.current, newValue);
+const event = new Event('input', { bubbles: true });
+textareaRef.current?.dispatchEvent(event);
+```
+
+## Keyboard Shortcuts
+
+The input area supports keyboard shortcuts (when used with `useChatKeyboard`):
+
+- **Cmd/Ctrl + Enter**: Submit message
+- **Cmd/Ctrl + K**: Focus input
+- **Esc**: Cancel voice recording
+
+## Accessibility
+
+- **Labels**: All interactive elements have proper labels
+- **ARIA attributes**: Menu items have appropriate ARIA roles
+- **Keyboard navigation**: Full keyboard support for all controls
+- **Focus management**: Proper focus handling for modal dialogs
+
+## Styling
+
+The component inherits styles from `PromptInput` primitives which provide:
+
+- **Theme support**: Light/dark mode
+- **Focus states**: Clear focus indicators
+- **Hover states**: Interactive feedback
+- **Disabled states**: Visual disabled state
+- **Responsive design**: Mobile-friendly layout
+
+## Integration Example
+
+Complete integration with all features:
+
+```tsx
+function CompleteChat() {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [input, setInput] = useState('');
+  const [activeQuickAction, setActiveQuickAction] = useState<QuickAction | null>(null);
+
+  const { messages, sendMessage, status } = usePersistentChat();
+  const { handleSubmit, isAnalyzing } = useFileSubmission({
+    setMessages,
+    sendMessage,
+  });
+
+  const updateTextareaValue = useCallback((value: string) => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement.prototype,
+        'value'
+      )?.set;
+      nativeInputValueSetter?.call(textarea, value);
+      const event = new Event('input', { bubbles: true });
+      textarea.dispatchEvent(event);
+    }
+    setInput(value);
+  }, []);
+
+  const voiceInput = useVoiceInput({ onTranscript: updateTextareaValue });
+
+  const canSend = (status === 'ready' || status === 'error') && !isAnalyzing;
+
+  const handleQuickAction = useCallback((prompt: string) => {
+    const action = QUICK_ACTIONS.find((a) => a.prompt === prompt);
+    if (action?.formFields?.length > 0) {
+      setActiveQuickAction(action);
+    } else if (!prompt.endsWith(' ')) {
+      handleSubmit({ text: prompt, files: [] });
+    } else {
+      updateTextareaValue(prompt);
+      textareaRef.current?.focus();
+    }
+  }, [handleSubmit, updateTextareaValue]);
+
+  return (
+    <div>
+      {/* Messages */}
+      <ChatConversation messages={messages} {...props} />
+
+      {/* Quick Action Form (if active) */}
+      {activeQuickAction && (
+        <QuickActionDataForm
+          action={activeQuickAction}
+          onSubmit={(composedPrompt) => {
+            setActiveQuickAction(null);
+            handleSubmit({ text: composedPrompt, files: [] });
+          }}
+          onCancel={() => setActiveQuickAction(null)}
+        />
+      )}
+
+      {/* Input Area */}
+      <ChatInputArea
+        textareaRef={textareaRef}
+        input={input}
+        onInputChange={(e) => setInput(e.target.value)}
+        onSubmit={handleSubmit}
+        canSend={canSend}
+        status={status}
+        isAnalyzingFile={isAnalyzing}
+        voiceProps={{
+          isListening: voiceInput.isListening,
+          isProcessing: voiceInput.isProcessing,
+          isSupported: voiceInput.isSupported,
+          mode: voiceInput.mode,
+          onClick: voiceInput.toggleListening,
+          disabled: !canSend,
+        }}
+        onQuickAction={handleQuickAction}
+      />
+    </div>
+  );
+}
+```
+
+## Related Components
+
+- [Chat](/components/chat/chat) - Main chat orchestrator
+- [ChatMessage](/components/chat/message) - Message display component
+- [VoiceButton](/components/voice/voice-button) - Voice input button
+
+## Related Hooks
+
+- [Voice Hooks](/components/hooks/use-voice) - Voice transcription
+- [Chat Hooks](/components/hooks/use-chat) - Chat state management
+- [File Submission Hook](/components/hooks/use-file-submission) - File upload handling
+
+## Source Code
+
+Location: `~/workspace/source/app/components/features/chat/chat-input-area.tsx`

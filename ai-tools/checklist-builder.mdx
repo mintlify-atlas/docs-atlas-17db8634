@@ -1,0 +1,107 @@
+---
+title: "Checklist Builder"
+description: "Generate AI-powered maintenance checklists"
+icon: "list-check"
+---
+
+The Checklist Builder uses AI to generate comprehensive maintenance checklists tailored to specific equipment and task types.
+
+## Overview
+
+Create customized maintenance checklists in seconds by providing:
+- Asset type (HVAC, pumps, electrical panels, etc.)
+- Task type (preventive, corrective, inspection, cleaning)
+- Optional notes for additional context
+
+## Features
+
+<CardGroup cols={2}>
+  <Card title="Asset-Specific" icon="gear">
+    Checklists tailored to equipment type and manufacturer specs
+  </Card>
+  <Card title="Task-Focused" icon="clipboard">
+    Different formats for preventive, corrective, and inspection tasks
+  </Card>
+  <Card title="Safety First" icon="shield">
+    Includes safety procedures and PPE requirements
+  </Card>
+  <Card title="Reusable" icon="recycle">
+    Save and reuse checklists across similar equipment
+  </Card>
+</CardGroup>
+
+## How to Use
+
+<Steps>
+  <Step title="Select Asset Type">
+    Choose from common equipment types:
+    - HVAC units (UMA)
+    - Pumps (BCA)
+    - Electrical panels (TAB)
+    - Compressors, generators, and more
+  </Step>
+  <Step title="Choose Task Type">
+    Select the maintenance activity:
+    - **Preventivo**: Routine maintenance
+    - **Correctivo**: Repair and fixes
+    - **Inspección**: Safety and compliance checks
+    - **Limpieza**: Cleaning and sanitization
+  </Step>
+  <Step title="Add Context (Optional)">
+    Provide additional details like:
+    - Specific equipment model
+    - Known issues
+    - Special requirements
+  </Step>
+  <Step title="Generate Checklist">
+    The AI creates a comprehensive checklist with:
+    - Safety procedures
+    - Required tools and materials
+    - Step-by-step instructions
+    - Verification points
+  </Step>
+</Steps>
+
+## Example Output
+
+```json
+{
+  "titulo": "Checklist de Mantenimiento Preventivo - Bomba Centrífuga",
+  "tipo_activo": "bomba",
+  "tipo_tarea": "preventivo",
+  "items": [
+    {
+      "paso": 1,
+      "descripcion": "Inspeccionar visualmente la bomba",
+      "categoria": "inspeccion",
+      "completado": false
+    },
+    {
+      "paso": 2,
+      "descripcion": "Verificar nivel y estado del lubricante",
+      "categoria": "verificacion",
+      "completado": false
+    }
+  ]
+}
+```
+
+## Technical Details
+
+The Checklist Builder is powered by:
+- **ChecklistAIService** (`app/lib/services/checklist-ai-service.ts`)
+- **GROQ LLaMA 3.3 70B** model for generation
+- **Zod validation** for structured output
+
+See [ChecklistAIService API Reference](/api-reference/services/ai-services) for implementation details.
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Activity Summaries" icon="file-lines" href="/ai-tools/activity-summaries">
+    Generate summary reports
+  </Card>
+  <Card title="AI Services API" icon="code" href="/api-reference/services/ai-services">
+    Technical documentation
+  </Card>
+</CardGroup>

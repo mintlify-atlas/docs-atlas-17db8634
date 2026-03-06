@@ -1,0 +1,467 @@
+---
+title: Tool Cards
+description: Specialized generative UI components for displaying chat tool execution results
+icon: wrench
+---
+
+Tool cards provide rich, interactive UI for chat tool results. Instead of displaying raw JSON or text, each tool renders a specialized card component that visualizes the data in context.
+
+## Overview
+
+The Gima AI chatbot uses tool cards to transform backend responses into purpose-built UI components. Tool cards handle three main states:
+
+1. **Loading** - Shows skeleton UI while tool executes
+2. **Success** - Renders result data in specialized cards
+3. **Error** - Displays error message with suggestions
+
+## Tool Card Types
+
+### Data Result Cards
+
+Displays tabular data from query tools. See [Generative Tables](/components/ai-elements/generative-tables) for details.
+
+```tsx
+import { DataResultCard } from '@/app/components/features/chat/tool-result-cards';
+
+<DataResultCard
+  data={{
+    items: [
+      { id: 1, nombre: 'Compresor A', estado: 'operativo' },
+      { id: 2, nombre: 'Bomba B', estado: 'mantenimiento' },
+    ],
+    pagination: {
+      page: 1,
+      lastPage: 1,
+      total: 2,
+      hasMore: false,
+    },
+  }}
+  toolName="tool-consultar_activos"
+  summary="Found 2 assets"
+/>
+```
+
+### Order Approval Cards
+
+Interactive cards that require user confirmation before executing actions.
+
+```tsx
+import { OrderApprovalCard } from '@/app/components/features/chat/tool-result-cards';
+
+<OrderApprovalCard
+  input={{
+    equipment: 'Compresor Principal',
+    description: 'Mantenimiento preventivo trimestral',
+    priority: 'alta',
+    location: 'Sala de Máquinas - Piso 3',
+  }}
+  onApprove={() => {
+    // Execute work order creation
+    executeWorkOrder(input);
+  }}
+  onDeny={() => {
+    // Cancel operation
+    console.log('Order cancelled by user');
+  }}
+/>
+```
+
+<Note>
+  The `crear_orden_trabajo` tool is client-side only and requires user approval. The execute function is handled by the client.
+</Note>
+
+### Loading Cards
+
+Shown during tool execution to provide visual feedback.
+
+```tsx
+import { ToolLoadingCard } from '@/app/components/features/chat/tool-result-cards';
+
+<ToolLoadingCard toolName="tool-consultar_activos" />
+// Displays: "Buscando activos..."
+
+<ToolLoadingCard toolName="tool-generar_checklist" />
+// Displays: "Generando checklist con IA..."
+```
+
+#### Supported Tool Labels
+
+<AccordionGroup>
+  <Accordion title="Query Tools">
+    - `tool-consultar_activos` → "Buscando activos..."
+    - `tool-consultar_mantenimientos` → "Consultando mantenimientos..."
+    - `tool-consultar_calendario` → "Cargando calendario..."
+    - `tool-consultar_reportes` → "Consultando reportes..."
+    - `tool-consultar_inventario` → "Buscando en inventario..."
+    - `tool-consultar_proveedores` → "Cargando proveedores..."
+  </Accordion>
+  
+  <Accordion title="AI Tools">
+    - `tool-generar_checklist` → "Generando checklist con IA..."
+    - `tool-generar_resumen_actividad` → "Generando resumen con IA..."
+  </Accordion>
+  
+  <Accordion title="Action Tools">
+    - `tool-crear_orden_trabajo` → "Preparando orden de trabajo..."
+  </Accordion>
+</AccordionGroup>
+
+### Error Cards
+
+Displays error messages with optional suggestions.
+
+```tsx
+import { ToolErrorCard } from '@/app/components/features/chat/tool-result-cards';
+
+<ToolErrorCard
+  error="El servicio tardó demasiado en responder"
+  suggestion="Intenta con filtros más específicos"
+/>
+```
+
+<CodeGroup>
+```typescript Backend Auth Error
+{
+  success: false,
+  error: 'No se pudo autenticar. Inicia sesión nuevamente.',
+  suggestion: 'Recarga la página e inicia sesión.'
+}
+```
+
+```typescript Timeout Error
+{
+  success: false,
+  error: 'El servicio tardó demasiado en responder. Intenta de nuevo.',
+  suggestion: 'Intenta con filtros más específicos.'
+}
+```
+
+```typescript API Error
+{
+  success: false,
+  error: 'Error del servidor: Connection refused',
+  suggestion: 'Verifica que el backend esté disponible.'
+}
+```
+</CodeGroup>
+
+## Backend Tool Integration
+
+Tool cards consume data from the AI SDK tool definitions in `/app/lib/ai/tools/chat-tools.ts`.
+
+### Tool Definition Structure
+
+```typescript
+import { tool } from 'ai';
+import { z } from 'zod';
+
+export const chatTools = {
+  consultar_activos: tool({
+    description: 'Consulta activos/equipos por nombre, código, estado o ubicación',
+    inputSchema: z.object({
+      estado: z.enum(['operativo', 'mantenimiento', 'fuera_servicio']).optional(),
+      buscar: z.string().optional(),
+      tipo: z.string().optional(),
+      page: z.number().optional().default(1),
+    }),
+    execute: async (params) => {
+      const api = await getAuthenticatedAPI();
+      const raw = await api.getActivos(params);
+      const result = normalizePaginatedResponse(raw);
+      
+      return {
+        success: true,
+        data: {
+          items: result.items.slice(0, 15), // Limit for token usage
+          pagination: result.pagination,
+        },
+        summary: `Found ${result.pagination.total} assets`,
+      };
+    },
+  }),
+};
+```
+
+### Data Normalization
+
+The backend service normalizes paginated responses from Laravel:
+
+```typescript
+function normalizePaginatedResponse(raw: unknown) {
+  // Handles:
+  // - Laravel Resource: { data[], links: object, meta: object }
+  // - Simple paginator: { data[], current_page, total, ... }
+  // - Custom wrapper: { items[], pagination: object }
+  
+  return {
+    items: [...],
+    pagination: {
+      page: 1,
+      perPage: 15,
+      total: 100,
+      lastPage: 7,
+    },
+  };
+}
+```
+
+### Error Handling
+
+```typescript
+async function safeExecute<T>(
+  toolName: string,
+  fn: () => Promise<T>
+): Promise<T | ToolErrorResult> {
+  try {
+    return await fn();
+  } catch (error) {
+    logger.error(`Tool ${toolName} failed`, error);
+    
+    if (error instanceof BackendAuthError) {
+      return {
+        success: false,
+        error: 'No se pudo autenticar. Inicia sesión nuevamente.',
+        suggestion: 'Recarga la página e inicia sesión.',
+      };
+    }
+    
+    if (isTimeoutError(error)) {
+      return {
+        success: false,
+        error: 'El servicio tardó demasiado en responder.',
+        suggestion: 'Intenta con filtros más específicos.',
+      };
+    }
+    
+    // ... other error types
+  }
+}
+```
+
+## AI Element Wrappers
+
+Tool cards integrate with the base AI element components:
+
+### Tool Component
+
+The generic collapsible wrapper for tool execution:
+
+```tsx
+import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput } from '@/app/components/ai-elements/tool';
+
+<Tool>
+  <ToolHeader
+    title="consultar_activos"
+    type="tool-consultar_activos"
+    state="output-available"
+  />
+  <ToolContent>
+    <ToolInput input={{ estado: 'operativo' }} />
+    <ToolOutput output={resultData} errorText={undefined} />
+  </ToolContent>
+</Tool>
+```
+
+#### Tool States
+
+<CardGroup cols={2}>
+  <Card title="input-streaming" icon="circle">
+    Parameters being received
+  </Card>
+  <Card title="input-available" icon="clock">
+    Ready to execute (animated pulse)
+  </Card>
+  <Card title="approval-requested" icon="clock">
+    Awaiting user confirmation
+  </Card>
+  <Card title="output-available" icon="check-circle">
+    Completed successfully
+  </Card>
+  <Card title="output-error" icon="x-circle">
+    Execution failed
+  </Card>
+  <Card title="output-denied" icon="x-circle">
+    User denied approval
+  </Card>
+</CardGroup>
+
+### Task Component
+
+For multi-step operations and file-based tasks:
+
+```tsx
+import { Task, TaskTrigger, TaskContent, TaskItem, TaskItemFile } from '@/app/components/ai-elements/task';
+
+<Task defaultOpen={true}>
+  <TaskTrigger title="Searching maintenance records" />
+  <TaskContent>
+    <TaskItem>Querying database...</TaskItem>
+    <TaskItem>
+      Found <TaskItemFile>maintenance-log.json</TaskItemFile>
+    </TaskItem>
+  </TaskContent>
+</Task>
+```
+
+## Utility Components
+
+### Copy Button
+
+Reusable copy-to-clipboard component:
+
+```tsx
+import { CopyButton } from '@/app/components/features/chat/tool-result-cards';
+
+<CopyButton
+  text="Text to copy"
+  label="Copy"
+/>
+// Shows checkmark for 2 seconds after copying
+```
+
+### Status Badge
+
+Auto-colored badge based on status value:
+
+```tsx
+function StatusBadge({ value }: { value: string }) {
+  // Normalizes: "En Mantenimiento" → "en_mantenimiento"
+  // Applies color: green (operativo), yellow (pendiente), red (inactivo)
+  // Capitalizes label: "en_mantenimiento" → "En Mantenimiento"
+}
+
+<StatusBadge value="operativo" />
+```
+
+### Priority Badge
+
+Similar to StatusBadge but for priority levels:
+
+```tsx
+function PriorityBadge({ value }: { value: string }) {
+  // Colors: alta → red, media → yellow, baja → green
+}
+
+<PriorityBadge value="alta" />
+```
+
+### Stock Indicator
+
+Color-coded stock display with threshold warnings:
+
+```tsx
+function StockIndicator({ stock, stockMin }) {
+  // Critical: red if stock <= min
+  // Warning: yellow if stock <= min * 1.5
+  // Normal: default color
+  // Format: "150/100" (stock/min)
+}
+
+<StockIndicator stock={75} stockMin={100} />
+// Displays: "75/100" in red (critical)
+```
+
+## Implementation Example
+
+Complete tool card rendering in a chat message:
+
+```tsx
+import {
+  ToolLoadingCard,
+  ToolErrorCard,
+  DataResultCard,
+  OrderApprovalCard,
+} from '@/app/components/features/chat/tool-result-cards';
+
+function ToolResultRenderer({ toolName, toolState, toolResult }) {
+  // Loading state
+  if (toolState === 'input-available') {
+    return <ToolLoadingCard toolName={toolName} />;
+  }
+  
+  // Error state
+  if (toolState === 'output-error' || !toolResult.success) {
+    return (
+      <ToolErrorCard
+        error={toolResult.error}
+        suggestion={toolResult.suggestion}
+      />
+    );
+  }
+  
+  // Approval required
+  if (toolName === 'tool-crear_orden_trabajo') {
+    return (
+      <OrderApprovalCard
+        input={toolResult.input}
+        onApprove={() => executeWorkOrder(toolResult.input)}
+        onDeny={() => console.log('Cancelled')}
+      />
+    );
+  }
+  
+  // Data result
+  return (
+    <DataResultCard
+      data={toolResult.data}
+      toolName={toolName}
+      summary={toolResult.summary}
+    />
+  );
+}
+```
+
+## Styling
+
+All tool cards use Tailwind CSS with dark mode support:
+
+```tsx
+// Light mode: bg-muted/50, text-foreground
+// Dark mode: dark:bg-muted/30, dark:text-foreground
+
+className="rounded-lg border border-border bg-muted/30 dark:bg-muted/20"
+```
+
+<Tip>
+  Badge colors automatically adjust for dark mode using Tailwind's dark variant classes.
+</Tip>
+
+## Performance Considerations
+
+### Token Limits
+
+The backend limits response size to prevent token overflow:
+
+```typescript
+const MAX_ITEMS_PER_RESPONSE = 15;
+const MAX_DESCRIPTION_LENGTH = 120;
+
+const items = result.items.slice(0, MAX_ITEMS_PER_RESPONSE);
+const description = truncate(item.description, MAX_DESCRIPTION_LENGTH);
+```
+
+### Debouncing
+
+Order approval buttons prevent double-submission:
+
+```tsx
+const [isSubmitting, setIsSubmitting] = useState(false);
+
+const handleApprove = () => {
+  setIsSubmitting(true);
+  onApprove();
+};
+```
+
+## Accessibility
+
+- All buttons have `aria-label` attributes
+- Tables use proper `role="table"` and `role="region"` attributes
+- Loading states show descriptive text, not just spinners
+- Error messages provide actionable suggestions
+
+## Related Components
+
+- [Generative Tables](/components/ai-elements/generative-tables) - Detailed table documentation
+- [Chat Message](/components/chat/message) - Chat message container
+- [Chat Tools](/api-reference/tools/chat-tools) - Tool definitions and schemas

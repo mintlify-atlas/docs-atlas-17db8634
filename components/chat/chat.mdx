@@ -1,0 +1,298 @@
+---
+title: Chat Component
+description: Main chat component that orchestrates the intelligent chat interface with multi-modal capabilities
+icon: messages-square
+---
+
+## Overview
+
+The `Chat` component is the main orchestrator of the GIMA AI Chatbot's intelligent chat system. It provides a complete conversational interface with multi-modal capabilities including text messaging, voice input, image analysis, and persistent chat history.
+
+## Features
+
+- **Multi-modal Input**: Text, voice (Gemini AI + native Web Speech API), images, and PDF documents
+- **Persistent Chat History**: Local storage integration for conversation persistence
+- **Voice Command Detection**: Automatic detection of work order commands from voice input
+- **Tool Integration**: Built-in support for AI tools like data queries, checklists, and summaries
+- **Keyboard Shortcuts**: Productivity-enhancing keyboard shortcuts
+- **Theme Support**: Light/dark mode with ThemeToggle
+- **Confirmation Dialogs**: Safety confirmations before destructive actions
+
+## Usage
+
+```tsx
+import { Chat } from '@/app/components/features/chat/chat';
+
+export default function ChatPage() {
+  return <Chat />;
+}
+```
+
+## Component Architecture
+
+The Chat component is composed of several sub-components:
+
+```tsx
+<Chat>
+  <ChatHeader />              {/* Title and clear history button */}
+  <ChatConversation />        {/* Message list and empty state */}
+  <ChatStatusIndicators />    {/* Voice, processing, and error status */}
+  <VoiceCommandMode />        {/* Dedicated voice command UI (conditional) */}
+  <QuickActionDataForm />     {/* Inline form for quick actions (conditional) */}
+  <ChatInputArea />           {/* Input with attachments and voice */}
+  <ConfirmDialog />           {/* Clear history confirmation */}
+</Chat>
+```
+
+## State Management
+
+The Chat component manages several pieces of state:
+
+```typescript
+interface ChatState {
+  // Local state
+  input: string;                                    // Current input text
+  showClearDialog: boolean;                         // Clear confirmation dialog
+  isCommandMode: boolean;                           // Voice command mode toggle
+  detectedCommand: VoiceWorkOrderCommand | null;    // Auto-detected voice command
+  activeQuickAction: QuickAction | null;            // Active quick action form
+  textareaRef: RefObject<HTMLTextAreaElement>;     // Input textarea reference
+
+  // From usePersistentChat hook
+  messages: UIMessage[];                            // Chat messages
+  status: 'ready' | 'streaming' | 'submitted' | 'error';
+  sendMessage: (message: string) => void;
+  reload: () => void;                               // Regenerate last response
+  clearHistory: () => void;
+  addToolOutput: (output: ToolOutput) => void;      // Client-side tool handling
+
+  // From useVoiceInput hook
+  isListening: boolean;                             // Voice recording active
+  isProcessing: boolean;                            // Voice being processed
+  isSupported: boolean;                             // Voice input supported
+  mode: 'gemini' | 'native';                        // Voice recognition mode
+  transcript: string;                               // Current transcript
+  toggleListening: () => void;
+
+  // From useFileSubmission hook
+  isAnalyzing: boolean;                             // File being analyzed
+  analyzingFileType: 'image' | 'pdf' | null;
+}
+```
+
+## Key Integrations
+
+### usePersistentChat Hook
+
+Manages chat messages and persistence:
+
+```typescript
+const {
+  messages,
+  sendMessage,
+  status,
+  reload,
+  error: chatError,
+  clearHistory,
+  setMessages,
+  addToolOutput,
+} = usePersistentChat();
+```
+
+See the [Chat Hooks documentation](/components/hooks/use-chat) for details.
+
+### useVoiceInput Hook
+
+Handles voice transcription with dual-mode support:
+
+```typescript
+const {
+  isListening,
+  isProcessing,
+  isSupported,
+  mode,
+  transcript,
+  toggleListening,
+  error: voiceError,
+} = useVoiceInput({ 
+  onTranscript: updateTextareaValue 
+});
+```
+
+### useFileSubmission Hook
+
+Manages image and PDF file analysis:
+
+```typescript
+const { 
+  handleSubmit, 
+  isAnalyzing, 
+  analyzingFileType 
+} = useFileSubmission({
+  setMessages,
+  sendMessage,
+  isListening,
+  toggleListening,
+});
+```
+
+## Voice System Architecture
+
+The Chat component implements a dual-voice system to balance ease of use with precision:
+
+### 1. Proactive Dictation (Default)
+
+Voice input translates speech to text in the input box. If a work order command is detected with high confidence (>0.9), a "Command Detected" popup appears.
+
+### 2. Dedicated Command Mode
+
+Specialized UI for maintenance tasks accessed via toggle button. This prevents accidental command execution during general chat.
+
+```tsx
+{isCommandMode && (
+  <VoiceCommandMode
+    onCommandExecuted={(result) => {
+      toast.success('Orden creada', result.message);
+      setIsCommandMode(false);
+    }}
+    onError={(err) => toast.error('Error', err)}
+    minConfidence={0.7}
+  />
+)}
+```
+
+## Quick Actions
+
+Quick actions provide shortcuts for common tasks:
+
+```typescript
+const handleQuickAction = (prompt: string) => {
+  const action = QUICK_ACTIONS.find((a) => a.prompt === prompt);
+
+  if (action?.formFields?.length > 0) {
+    // Show inline form for data collection
+    setActiveQuickAction(action);
+  } else if (!prompt.endsWith(' ')) {
+    // Complete prompt - send directly
+    handleSubmit({ text: prompt, files: [] });
+  } else {
+    // Incomplete prompt - populate input
+    updateTextareaValue(prompt);
+    textareaRef.current?.focus();
+  }
+};
+```
+
+## Tool Approval Flow
+
+For tools that require user approval (e.g., `crear_orden_trabajo`):
+
+```typescript
+const handleToolApproval = async (
+  toolCallId: string, 
+  approved: boolean, 
+  input?: any
+) => {
+  if (!approved) {
+    addToolOutput({
+      tool: 'crear_orden_trabajo',
+      toolCallId,
+      output: { success: false, error: 'Rechazado por el usuario' },
+    });
+    return;
+  }
+
+  try {
+    const service = getWorkOrderService();
+    const result = await service.create(/* ... */);
+    
+    addToolOutput({
+      tool: 'crear_orden_trabajo',
+      toolCallId,
+      output: {
+        success: true,
+        resourceId: result.resourceId,
+        resourceUrl: result.resourceUrl,
+        message: result.message
+      },
+    });
+    toast.success('Orden Creada', result.message);
+  } catch (error) {
+    addToolOutput({
+      tool: 'crear_orden_trabajo',
+      toolCallId,
+      output: { success: false, error: error.message },
+    });
+    toast.error('Error', 'No se pudo crear la orden de trabajo.');
+  }
+};
+```
+
+## Keyboard Shortcuts
+
+The Chat component includes keyboard shortcuts via `useChatKeyboard`:
+
+- **Cmd/Ctrl + Enter**: Submit message
+- **Cmd/Ctrl + K**: Focus input
+- **Esc**: Cancel voice recording
+
+```typescript
+useChatKeyboard({
+  onSubmit: () => {
+    if (input.trim() && canSend) {
+      handleSubmit({ text: input, files: [] });
+      setInput('');
+    }
+  },
+  onCancelVoice: () => {
+    if (isListening) toggleListening();
+  },
+  onFocusInput: () => textareaRef.current?.focus(),
+  canSubmit: Boolean(input.trim() && canSend),
+  isListening,
+});
+```
+
+## Auto-Detection of Voice Commands
+
+The component automatically detects work order commands from voice transcripts:
+
+```typescript
+useEffect(() => {
+  const isGeminiFinish = prevIsProcessing.current && !isProcessing;
+  const isNativeFinish = prevIsListening.current && !isListening && !isProcessing;
+
+  if ((isGeminiFinish || isNativeFinish) && transcript.trim().length > 5) {
+    const checkCommand = async () => {
+      const result = await executeVoiceCommand(transcript, { 
+        minConfidence: 0.6 
+      });
+
+      if (result.success && result.command) {
+        setDetectedCommand(result.command);
+      }
+    };
+
+    void checkCommand();
+  }
+}, [isListening, isProcessing, transcript]);
+```
+
+## Image Analysis Flow
+
+When users attach images with minimal text (less than 10 characters):
+
+1. Image is automatically analyzed with Gemini Vision
+2. Analysis result is added as assistant message
+3. User can continue conversation with image context
+
+## Related Components
+
+- [ChatMessage](/components/chat/message) - Individual message rendering
+- [ChatInputArea](/components/chat/input) - Input area with attachments
+- [Chat Hooks](/components/hooks/use-chat) - Chat state management hooks
+- [Voice Components](/components/voice/voice-button) - Voice input integration
+
+## Source Code
+
+Location: `~/workspace/source/app/components/features/chat/chat.tsx`

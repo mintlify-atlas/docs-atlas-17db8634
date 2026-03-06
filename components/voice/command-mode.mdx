@@ -1,0 +1,371 @@
+---
+title: 'VoiceCommandMode'
+description: 'Complete voice-to-command workflow with recording, parsing, preview, and execution'
+icon: 'command'
+---
+
+## Overview
+
+The `VoiceCommandMode` component provides a complete end-to-end voice command workflow. It integrates voice recording, command parsing, user confirmation, and command execution into a single, cohesive interface.
+
+## Features
+
+- **Complete Workflow**: Records voice → Parses command → Shows preview → Executes action
+- **Smart Parsing**: Uses AI to extract structured data from voice transcriptions
+- **User Confirmation**: Shows parsed command details before execution
+- **Error Handling**: Displays parsing and execution errors with retry options
+- **Status Feedback**: Real-time status indicators throughout the process
+- **Flexible Integration**: Customizable callbacks for different use cases
+
+## Workflow Steps
+
+<Steps>
+  <Step title="Voice Recording">
+    User clicks VoiceButton to start recording. Component displays "Escuchando..." status.
+  </Step>
+  
+  <Step title="Audio Processing">
+    Audio is transcribed using Gemini AI or native browser API. Shows "Procesando comando..." status.
+  </Step>
+  
+  <Step title="Command Preview">
+    Parsed command is displayed with extracted fields (equipment, location, priority) for user confirmation.
+  </Step>
+  
+  <Step title="Execution">
+    User confirms and command is executed. Status indicator shows progress and result.
+  </Step>
+</Steps>
+
+## Props
+
+<ParamField path="onCommandExecuted" type="(result: CommandResult) => void">
+  Callback invoked when command executes successfully
+  
+  ```tsx
+  type CommandResult = {
+    resourceId?: string;
+    message: string;
+  }
+  ```
+</ParamField>
+
+<ParamField path="onError" type="(error: string) => void">
+  Callback invoked when an error occurs during parsing or execution
+</ParamField>
+
+<ParamField path="minConfidence" type="number" default="0.7">
+  Minimum confidence threshold for command parsing (0-1). Commands below this threshold require explicit confirmation.
+</ParamField>
+
+<ParamField path="context" type="string">
+  Additional context to help with command parsing (e.g., current screen, user role)
+</ParamField>
+
+<ParamField path="className" type="string">
+  Additional CSS classes for custom styling
+</ParamField>
+
+## Usage Examples
+
+### Basic Implementation
+
+```tsx
+import { VoiceCommandMode } from '@/app/components/features/voice/voice-command-mode';
+
+function WorkOrderPage() {
+  const handleCommandExecuted = (result) => {
+    console.log('Command executed:', result.message);
+    if (result.resourceId) {
+      // Navigate to created resource
+      router.push(`/work-orders/${result.resourceId}`);
+    }
+  };
+
+  const handleError = (error) => {
+    toast.error(error);
+  };
+
+  return (
+    <VoiceCommandMode
+      onCommandExecuted={handleCommandExecuted}
+      onError={handleError}
+    />
+  );
+}
+```
+
+### With Custom Confidence Threshold
+
+```tsx
+<VoiceCommandMode
+  minConfidence={0.8}
+  onCommandExecuted={handleSuccess}
+  onError={handleError}
+/>
+```
+
+### With Context for Better Parsing
+
+```tsx
+function EquipmentDetailPage({ equipmentId, equipmentName }) {
+  return (
+    <VoiceCommandMode
+      context={`Current equipment: ${equipmentName} (ID: ${equipmentId})`}
+      onCommandExecuted={handleCommandExecuted}
+      onError={handleError}
+    />
+  );
+}
+```
+
+### With Custom Styling
+
+```tsx
+<VoiceCommandMode
+  className="mt-4 p-4 bg-gray-50 rounded-lg"
+  onCommandExecuted={handleCommandExecuted}
+  onError={handleError}
+/>
+```
+
+## Flow States
+
+The component manages several internal states:
+
+<AccordionGroup>
+  <Accordion title="idle" icon="circle">
+    Ready to record. VoiceButton is enabled and waiting for user input.
+  </Accordion>
+  
+  <Accordion title="listening" icon="microphone">
+    Actively recording audio. Displays "Escuchando..." status text.
+  </Accordion>
+  
+  <Accordion title="processing" icon="spinner">
+    Processing and parsing the recorded audio. Displays "Procesando comando..." status.
+  </Accordion>
+  
+  <Accordion title="preview" icon="eye">
+    Showing CommandPreview with parsed fields. VoiceButton is disabled.
+  </Accordion>
+  
+  <Accordion title="executing" icon="play">
+    Executing the confirmed command. CommandStatusIndicator shows progress.
+  </Accordion>
+</AccordionGroup>
+
+## Command Types
+
+The component supports multiple command types:
+
+### Work Order Commands
+
+Creates maintenance work orders with extracted fields:
+
+```typescript
+type WorkOrderCommand = {
+  type: 'work_order';
+  equipment?: string;      // Equipment name or ID
+  location?: string;       // Physical location
+  priority?: 'urgent' | 'normal' | 'low';
+  description?: string;    // Issue description
+  assignee?: string;       // Person to assign to
+  confidence: number;      // Parse confidence (0-1)
+}
+```
+
+**Example voice input**: "Crear orden de trabajo urgente para bomba B-102 en planta norte"
+
+### Navigation Commands
+
+Navigates to different screens:
+
+```typescript
+type NavigationCommand = {
+  type: 'navigation';
+  screen?: string;         // Screen name
+  path?: string;           // Route path
+  confidence: number;
+}
+```
+
+**Example voice input**: "Ir a historial de órdenes"
+
+### System Commands
+
+Performs system actions:
+
+```typescript
+type SystemCommand = {
+  type: 'system';
+  action: 'theme_mode' | 'logout';
+  confidence: number;
+}
+```
+
+**Example voice input**: "Cambiar tema a oscuro"
+
+## Child Components
+
+### VoiceButton Integration
+
+Integrated at `voice-command-mode.tsx:89`:
+
+```tsx
+<VoiceButton
+  isListening={isListening}
+  isProcessing={isProcessing || flowState === 'processing'}
+  isSupported={isSupported}
+  mode={mode}
+  onClick={toggleListening}
+  disabled={flowState === 'confirming' || flowState === 'preview' || isExecuting}
+/>
+```
+
+### CommandPreview Integration
+
+Shown when command is parsed (at `voice-command-mode.tsx:128`):
+
+```tsx
+<CommandPreview
+  command={parsedCommand}
+  onConfirm={handleConfirm}
+  onCancel={handleCancel}
+  onRetry={handleRetry}
+  isConfirming={isExecuting}
+/>
+```
+
+### CommandStatusIndicator Integration
+
+Displays execution status (at `voice-command-mode.tsx:111`):
+
+```tsx
+<CommandStatusIndicator
+  status={executionState.status}
+  message={executionState.result?.message || executionState.error?.message}
+  duration={executionState.duration}
+  compact={false}
+/>
+```
+
+## Error Handling
+
+### Parsing Errors
+
+Displayed when voice command cannot be parsed:
+
+```tsx
+{displayError && flowState === 'idle' && !showExecutionStatus && (
+  <div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded">
+    {displayError}
+  </div>
+)}
+```
+
+### Execution Errors
+
+Shown via CommandStatusIndicator with retry option.
+
+## Hooks
+
+The component uses the `useVoiceCommandFlow` hook to manage complex state transitions:
+
+```tsx
+const {
+  flowState,         // Current workflow state
+  parsedCommand,     // Parsed command object
+  parseError,        // Parsing error message
+  execution,         // Execution state
+  voiceInput,        // Voice recording state
+  handleConfirm,     // Confirm and execute
+  handleCancel,      // Cancel command
+  handleRetry,       // Retry recording
+} = useVoiceCommandFlow({
+  onCommandExecuted,
+  onError,
+  minConfidence,
+  context,
+});
+```
+
+## Accessibility
+
+- **Keyboard Navigation**: All actions accessible via keyboard
+- **Screen Reader Support**: Status updates announced via ARIA live regions
+- **Focus Management**: Focus moves appropriately through workflow steps
+- **Visual Feedback**: Multiple indicators for current state
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Provide Context" icon="message-lines">
+    Pass relevant context to improve parsing accuracy, especially when on specific screens or with known entities.
+  </Card>
+  
+  <Card title="Handle Errors" icon="triangle-exclamation">
+    Always provide onError callback to gracefully handle parsing or execution failures.
+  </Card>
+  
+  <Card title="Set Confidence Threshold" icon="gauge-high">
+    Adjust minConfidence based on use case. Higher values require more explicit confirmation.
+  </Card>
+  
+  <Card title="Provide Feedback" icon="comment">
+    Use onCommandExecuted to show success messages or navigate to created resources.
+  </Card>
+</CardGroup>
+
+## Integration Example
+
+```tsx
+import { VoiceCommandMode } from '@/app/components/features/voice/voice-command-mode';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
+
+function MaintenancePage() {
+  const router = useRouter();
+
+  return (
+    <div className="flex flex-col gap-4">
+      <h1>Maintenance Dashboard</h1>
+      
+      <VoiceCommandMode
+        minConfidence={0.75}
+        context="Maintenance dashboard - Work orders page"
+        onCommandExecuted={(result) => {
+          toast.success(result.message);
+          if (result.resourceId) {
+            router.push(`/work-orders/${result.resourceId}`);
+          }
+        }}
+        onError={(error) => {
+          toast.error(`Voice command failed: ${error}`);
+        }}
+        className="fixed bottom-4 right-4 z-50"
+      />
+    </div>
+  );
+}
+```
+
+## Source Reference
+
+Component implementation: `app/components/features/voice/voice-command-mode.tsx:44`
+
+Hook implementation: `app/components/features/voice/hooks/use-voice-command-flow.ts`
+
+## Related Components
+
+<CardGroup cols={3}>
+  <Card title="VoiceButton" icon="microphone" href="/components/voice/voice-button">
+    Voice recording button
+  </Card>
+  <Card title="CommandPreview" icon="eye">
+    Command confirmation UI
+  </Card>
+  <Card title="CommandStatusIndicator" icon="chart-line">
+    Execution status display
+  </Card>
+</CardGroup>

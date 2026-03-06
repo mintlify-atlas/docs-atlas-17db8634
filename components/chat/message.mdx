@@ -1,0 +1,416 @@
+---
+title: ChatMessage Component
+description: Individual chat message component with Generative UI support for tool results and rich content
+icon: message-square
+---
+
+## Overview
+
+The `ChatMessage` component renders individual messages in the chat conversation. It supports rich content including text (with markdown), images, and dynamic tool results using the Generative UI pattern from AI SDK v5.
+
+## Features
+
+- **Markdown Support**: Rich text formatting in messages
+- **Image Attachments**: Display multiple images per message
+- **Generative UI**: Dynamic React components for tool results
+- **Tool States**: Loading, error, and success states for tools
+- **Collapsible Text**: Collapse LLM commentary when tool results are present
+- **Message Actions**: Copy and regenerate actions for assistant messages
+- **Tool Approval**: User confirmation for sensitive operations
+
+## Props
+
+```typescript
+interface ChatMessageProps {
+  /** Message data from AI SDK */
+  message: UIMessage;
+  
+  /** Callback to regenerate the assistant's response */
+  onRegenerate: () => void;
+  
+  /** Callback to copy message text to clipboard */
+  onCopy: (text: string) => void;
+  
+  /** Callback for tool approval workflow (optional) */
+  onToolApproval?: (approvalId: string, approved: boolean, input?: any) => void;
+}
+```
+
+## Usage
+
+```tsx
+import { ChatMessage } from '@/app/components/features/chat/chat-message';
+
+function Conversation({ messages }) {
+  return (
+    <div>
+      {messages.map((message) => (
+        <ChatMessage
+          key={message.id}
+          message={message}
+          onRegenerate={() => reload()}
+          onCopy={(text) => copyToClipboard(text)}
+          onToolApproval={(id, approved, input) => 
+            handleToolApproval(id, approved, input)
+          }
+        />
+      ))}
+    </div>
+  );
+}
+```
+
+## Message Structure
+
+Messages follow the AI SDK v5 structure with typed parts:
+
+```typescript
+interface UIMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  parts: MessagePart[];
+  createdAt?: Date;
+}
+
+type MessagePart = TextPart | ImagePart | ToolPart;
+
+interface TextPart {
+  type: 'text';
+  text: string;
+}
+
+interface ImagePart {
+  type: 'image';
+  imageUrl: string;
+  mimeType?: string;
+}
+
+interface ToolPart {
+  type: string; // 'tool-<toolName>'
+  toolCallId: string;
+  state: 'input-streaming' | 'input-available' | 'output-available' | 'output-error' | 'approval-requested';
+  input?: any;
+  output?: any;
+  errorText?: string;
+  approval?: { id: string };
+}
+```
+
+## Rendering Logic
+
+The ChatMessage component renders different content types based on message parts:
+
+### Text Content
+
+Markdown-formatted text is rendered using the `MessageResponse` component:
+
+```tsx
+{textContent && (
+  <MessageContent>
+    <MessageResponse>{textContent}</MessageResponse>
+  </MessageContent>
+)}
+```
+
+When tool results are present, text is collapsed by default:
+
+```tsx
+{textContent && toolParts.length > 0 ? (
+  <CollapsibleLLMText text={textContent} />
+) : textContent ? (
+  <MessageContent>
+    <MessageResponse>{textContent}</MessageResponse>
+  </MessageContent>
+) : null}
+```
+
+### Image Attachments
+
+Images are rendered using the `MessageAttachment` component:
+
+```tsx
+{imageParts.length > 0 && (
+  <MessageAttachments>
+    {imageParts.map((part, i) => (
+      <MessageAttachment
+        key={`${message.id}-img-${i}`}
+        data={{
+          type: 'file',
+          url: part.imageUrl,
+          mediaType: part.mimeType || 'image/jpeg',
+          filename: `image-${i + 1}.jpg`,
+        }}
+      />
+    ))}
+  </MessageAttachments>
+)}
+```
+
+### Tool Results - Generative UI
+
+Tool parts are rendered as specialized React components based on tool type and state:
+
+```tsx
+{toolParts.map((part) => {
+  const key = `${message.id}-${part.toolCallId}`;
+
+  // Loading state
+  if (part.state === 'input-streaming' || part.state === 'input-available') {
+    return <ToolLoadingCard key={key} toolName={part.type} />;
+  }
+
+  // Error state
+  if (part.state === 'output-error') {
+    return (
+      <ToolErrorCard
+        key={key}
+        error={part.errorText || 'Error desconocido'}
+        suggestion="Intenta reformular tu consulta"
+      />
+    );
+  }
+
+  // Approval request
+  if (part.type === 'tool-crear_orden_trabajo' && 
+      part.state === 'approval-requested') {
+    return (
+      <OrderApprovalCard
+        key={key}
+        input={part.input || {}}
+        onApprove={() => onToolApproval?.(part.approval?.id || '', true, part.input)}
+        onDeny={() => onToolApproval?.(part.approval?.id || '', false, part.input)}
+      />
+    );
+  }
+
+  // Success - render appropriate component
+  if (part.state === 'output-available') {
+    const output = part.output;
+
+    // Data table tools
+    if (DATA_TABLE_TOOLS.has(part.type) && output?.success && output?.data) {
+      return (
+        <DataResultCard
+          key={key}
+          data={output.data}
+          toolName={part.type}
+          summary={output.summary}
+        />
+      );
+    }
+
+    // Checklist tool
+    if (part.type === 'tool-generar_checklist' && 
+        output?.success && output?.checklist) {
+      return (
+        <ChecklistResultCard
+          key={key}
+          checklist={output.checklist}
+          cached={output.cached}
+        />
+      );
+    }
+
+    // Summary tool
+    if (part.type === 'tool-generar_resumen_actividad' && 
+        output?.success && output?.summary) {
+      return (
+        <SummaryResultCard
+          key={key}
+          summary={output.summary}
+          cached={output.cached}
+        />
+      );
+    }
+  }
+
+  return null;
+})}
+```
+
+## Supported Tool Types
+
+### Data Table Tools
+
+These tools render as interactive data tables:
+
+- `tool-consultar_activos` - Asset queries
+- `tool-consultar_activos_por_categoria` - Assets by category
+- `tool-consultar_mantenimientos` - Maintenance records
+- `tool-consultar_calendario` - Calendar events
+- `tool-consultar_reportes` - Reports
+- `tool-consultar_inventario` - Inventory
+- `tool-consultar_proveedores` - Suppliers
+
+### Specialized Tools
+
+- `tool-generar_checklist` - Maintenance checklists
+- `tool-generar_resumen_actividad` - Activity summaries
+- `tool-crear_orden_trabajo` - Work order creation (with approval)
+
+## Collapsible LLM Text
+
+When tool results are present, the LLM's text commentary is collapsed by default to reduce visual noise:
+
+```tsx
+function CollapsibleLLMText({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="mb-1">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="inline-flex items-center gap-1 text-[11px] 
+                   text-muted-foreground hover:text-foreground transition-colors py-0.5"
+      >
+        {expanded ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+        {expanded ? 'Ocultar comentario del asistente' : 'Ver comentario del asistente'}
+      </button>
+      {expanded && (
+        <MessageContent>
+          <MessageResponse>{text}</MessageResponse>
+        </MessageContent>
+      )}
+    </div>
+  );
+}
+```
+
+## Message Actions
+
+Assistant messages include action buttons:
+
+```tsx
+{message.role === 'assistant' && textContent && (
+  <MessageActions>
+    {/* Regenerate (except for analysis messages) */}
+    {!textContent.includes('Análisis Visual (IA)') && 
+     !textContent.includes('**Análisis de Documento**') && (
+      <MessageAction onClick={onRegenerate} label="Reintentar">
+        <RefreshCcwIcon className="size-3" />
+      </MessageAction>
+    )}
+    
+    {/* Copy */}
+    <MessageAction onClick={() => onCopy(textContent)} label="Copiar">
+      <CopyIcon className="size-3" />
+    </MessageAction>
+  </MessageActions>
+)}
+```
+
+## Tool Approval Workflow
+
+For sensitive operations like creating work orders, the component shows an approval card:
+
+```tsx
+{part.type === 'tool-crear_orden_trabajo' && 
+ part.state === 'approval-requested' && (
+  <OrderApprovalCard
+    input={part.input || {}}
+    onApprove={() => onToolApproval?.(part.approval?.id || '', true, part.input)}
+    onDeny={() => onToolApproval?.(part.approval?.id || '', false, part.input)}
+  />
+)}
+```
+
+The parent component handles the approval:
+
+```typescript
+const handleToolApproval = async (
+  approvalId: string,
+  approved: boolean,
+  input?: any
+) => {
+  if (!approved) {
+    addToolOutput({
+      tool: 'crear_orden_trabajo',
+      toolCallId: approvalId,
+      output: { success: false, error: 'Rechazado por el usuario' },
+    });
+    return;
+  }
+
+  // Execute approved action
+  const result = await executeWorkOrder(input);
+  addToolOutput({
+    tool: 'crear_orden_trabajo',
+    toolCallId: approvalId,
+    output: result,
+  });
+};
+```
+
+## Helper Functions
+
+### Extract Text Content
+
+```typescript
+function getTextContent(parts: unknown[] | undefined): string {
+  if (!parts || parts.length === 0) return '';
+  const textParts = parts.filter(
+    (part: any): part is TextPart => part?.type === 'text'
+  );
+  return textParts.map((part) => part.text).join('\n\n');
+}
+```
+
+### Type Guard for Tool Parts
+
+```typescript
+function isToolPart(part: any): part is ToolPart {
+  return typeof part?.type === 'string' && part.type.startsWith('tool-');
+}
+```
+
+## Dynamic Imports
+
+Large components are dynamically imported to reduce initial bundle size:
+
+```tsx
+const ChecklistResultCard = dynamic(
+  () => import('./cards/checklist-result-card'),
+  {
+    loading: () => (
+      <div className="p-4 text-center text-sm text-muted-foreground">
+        <Loader2 className="size-4 animate-spin inline-block mr-2" /> 
+        Cargando componente...
+      </div>
+    ),
+  }
+);
+
+const SummaryResultCard = dynamic(
+  () => import('./cards/summary-result-card'),
+  {
+    loading: () => (
+      <div className="p-4 text-center text-sm text-muted-foreground">
+        <Loader2 className="size-4 animate-spin inline-block mr-2" /> 
+        Cargando componente...
+      </div>
+    ),
+  }
+);
+```
+
+## Styling
+
+The component uses the `ai-elements/message` primitives which provide consistent styling:
+
+- `<Message>` - Container with role-based styling
+- `<MessageContent>` - Content wrapper
+- `<MessageResponse>` - Markdown text renderer
+- `<MessageAttachments>` - Attachment grid
+- `<MessageAttachment>` - Individual attachment
+- `<MessageActions>` - Action button container
+- `<MessageAction>` - Individual action button
+
+## Related Components
+
+- [Chat](/components/chat/chat) - Main chat orchestrator
+- [ChatInputArea](/components/chat/input) - Message input component
+- [Tool Cards](/components/ai-elements/tool-cards) - Tool result renderers
+
+## Source Code
+
+Location: `~/workspace/source/app/components/features/chat/chat-message.tsx`

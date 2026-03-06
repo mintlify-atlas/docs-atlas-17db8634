@@ -1,80 +1,178 @@
 ---
 title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+description: "Get Gima AI Chatbot up and running in under 5 minutes"
+icon: "rocket"
 ---
 
-## Get started in three steps
+Get started with Gima AI Chatbot and have a working AI assistant in minutes.
 
-Get your documentation site running locally and make your first customization.
+## Prerequisites
 
-### Step 1: Set up your local environment
+Before you begin, make sure you have:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+- **Node.js 20+** installed on your system
+- A package manager (npm, yarn, or pnpm)
+- API keys for:
+  - [GROQ API](https://console.groq.com/) - For LLM chat capabilities
+  - [Google Gemini](https://makersuite.google.com/app/apikey) - For voice and vision features
 
-### Step 2: Deploy your changes
+## Quick Start
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+<Steps>
+  <Step title="Clone and Install">
+    Clone the repository and install dependencies:
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    <CodeGroup>
+    ```bash npm
+    git clone https://github.com/jose-miserol/gima-ai-chatbot.git
+    cd gima-ai-chatbot
+    npm install
+    ```
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    ```bash yarn
+    git clone https://github.com/jose-miserol/gima-ai-chatbot.git
+    cd gima-ai-chatbot
+    yarn install
+    ```
 
-### Step 3: Go live
+    ```bash pnpm
+    git clone https://github.com/jose-miserol/gima-ai-chatbot.git
+    cd gima-ai-chatbot
+    pnpm install
+    ```
+    </CodeGroup>
+  </Step>
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+  <Step title="Configure Environment">
+    Create your environment file and add your API keys:
 
-## Next steps
+    ```bash
+    cp .env.example .env.local
+    ```
 
-Now that you have your docs running, explore these key features:
+    Edit `.env.local` and add your keys:
+
+    ```env .env.local
+    GROQ_API_KEY=gsk_your_groq_key_here
+    GOOGLE_GENERATIVE_AI_API_KEY=AIzaYour_gemini_key_here
+    NODE_ENV=development
+    ```
+
+    <Note>
+    Make sure your `.env.local` file is saved with UTF-8 encoding to avoid validation errors.
+    </Note>
+  </Step>
+
+  <Step title="Start the Development Server">
+    Run the development server:
+
+    <CodeGroup>
+    ```bash npm
+    npm run dev
+    ```
+
+    ```bash yarn
+    yarn dev
+    ```
+
+    ```bash pnpm
+    pnpm dev
+    ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Open in Browser">
+    Open [http://localhost:3000](http://localhost:3000) in your browser and start chatting!
+
+    Try these example queries:
+    - "Muéstrame los equipos de aire acondicionado"
+    - "¿Cuáles son los mantenimientos pendientes?"
+    - "Listar repuestos con bajo inventario"
+  </Step>
+</Steps>
+
+## Get Your API Keys
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="GROQ API Key" icon="key" href="https://console.groq.com/">
+    Sign up for a free GROQ account and generate your API key for LLaMA model access
+  </Card>
+  <Card title="Google Gemini Key" icon="key" href="https://makersuite.google.com/app/apikey">
+    Get your Google AI Studio API key for Gemini vision and voice capabilities
+  </Card>
 </CardGroup>
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+## What's Next?
+
+Now that you have Gima running, explore its powerful features:
+
+<CardGroup cols={2}>
+  <Card title="Voice Commands" icon="microphone" href="/features/voice-commands">
+    Create work orders using natural voice commands
+  </Card>
+  <Card title="Image Analysis" icon="camera" href="/features/image-analysis">
+    Analyze equipment parts with AI-powered computer vision
+  </Card>
+  <Card title="PDF Processing" icon="file-pdf" href="/features/pdf-processing">
+    Extract and analyze maintenance manuals
+  </Card>
+  <Card title="AI Tools" icon="robot" href="/ai-tools/overview">
+    Generate checklists, summaries, and closeout notes
+  </Card>
+</CardGroup>
+
+## Common First-Time Issues
+
+<AccordionGroup>
+  <Accordion title="ZodError: expected string, received undefined">
+    This usually means your `.env.local` file is not being read correctly. Make sure:
+    - The file is named `.env.local` (not `.env`)
+    - It's in the root directory
+    - It's saved with UTF-8 encoding (not UTF-16)
+    
+    On Windows, you can convert the encoding with PowerShell:
+    ```powershell
+    $content = Get-Content .env.local -Raw -Encoding Unicode
+    [System.IO.File]::WriteAllText((Resolve-Path .env.local), $content, [System.Text.UTF8Encoding]::new($false))
+    ```
+  </Accordion>
+
+  <Accordion title="Invalid API Key errors">
+    Verify your API keys:
+    - GROQ keys must start with `gsk_`
+    - Google Gemini keys must start with `AIza`
+    - Keys should have no spaces or quotes around them
+  </Accordion>
+
+  <Accordion title="Port 3000 already in use">
+    Either stop the process using port 3000 or use a different port:
+    ```bash
+    PORT=3001 npm run dev
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Try Advanced Features
+
+<Tip>
+Enable optional features by setting environment variables:
+
+```env
+NEXT_PUBLIC_ENABLE_CHAT_PERSISTENCE=true
+NEXT_PUBLIC_FEATURE_VOICE_COMMANDS=true
+NEXT_PUBLIC_FEATURE_PDF_READER=true
+```
+
+See the [Configuration Guide](/guides/configuration) for all available options.
+</Tip>
+
+## Need More Help?
+
+<CardGroup cols={2}>
+  <Card title="Installation Guide" icon="download" href="/installation">
+    Detailed setup instructions and system requirements
+  </Card>
+  <Card title="Configuration" icon="gear" href="/guides/configuration">
+    Complete environment variable reference
+  </Card>
+</CardGroup>

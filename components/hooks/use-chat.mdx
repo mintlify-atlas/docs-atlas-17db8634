@@ -1,0 +1,429 @@
+---
+title: "useChat Hooks"
+description: "React hooks for managing chat functionality including message submission, actions, and keyboard shortcuts"
+---
+
+The chat module provides several specialized hooks that work together to provide a complete chat experience.
+
+## Overview
+
+The chat functionality is split into three main hooks:
+
+- **useChatSubmit** - Handles message submission logic
+- **useChatActions** - Provides common chat actions (regenerate, clear, copy)
+- **useChatKeyboard** - Manages keyboard shortcuts for chat interactions
+
+---
+
+## useChatSubmit
+
+Manages the complete message submission flow including validation, voice control, image detection, and automatic analysis.
+
+### Import
+
+```tsx
+import { useChatSubmit } from '@/app/components/features/chat/hooks';
+```
+
+### Parameters
+
+<ParamField path="sendMessage" type="function" required>
+  Function to send messages to the API
+  
+  ```tsx
+  (message: { text: string; files?: FileAttachment[] }, options?: SendMessageOptions) => void
+  ```
+</ParamField>
+
+<ParamField path="isListening" type="boolean" required>
+  Whether voice recording is currently active
+</ParamField>
+
+<ParamField path="toggleListening" type="function" required>
+  Function to toggle voice recording on/off
+</ParamField>
+
+<ParamField path="model" type="string" required>
+  The AI model to use for processing (e.g., "llama-3.1-70b")
+</ParamField>
+
+<ParamField path="setInput" type="function" required>
+  Function to update the input field value
+</ParamField>
+
+<ParamField path="analyzeImage" type="function" required>
+  Function to analyze images using Gemini Vision
+  
+  ```tsx
+  (imageFile: FileAttachment) => Promise<boolean>
+  ```
+</ParamField>
+
+<ParamField path="setIsAnalyzingImage" type="function" required>
+  Function to update the image analysis state
+</ParamField>
+
+### Return Value
+
+<ResponseField name="handleSubmit" type="function">
+  Async function that handles message submission
+  
+  ```tsx
+  (message: PromptInputMessage) => Promise<void>
+  ```
+</ResponseField>
+
+### Types
+
+```tsx
+interface FileAttachment {
+  url?: string;
+  mediaType?: string;
+  name?: string;
+}
+
+interface SendMessageOptions {
+  body?: {
+    model?: string;
+  };
+}
+
+interface PromptInputMessage {
+  text?: string;
+  files?: FileAttachment[];
+}
+```
+
+### Behavior
+
+The hook implements intelligent message submission logic:
+
+1. **Validation** - Ensures message has text or attachments before sending
+2. **Voice Control** - Automatically stops voice recording when submitting
+3. **Image Detection** - Identifies image attachments automatically
+4. **Auto-Analysis** - If an image is attached with less than 10 characters of text, it delegates to Gemini Vision for automatic analysis
+5. **Normal Messages** - Text messages are sent to the configured GROQ model
+
+### Usage Example
+
+```tsx
+import { useChatSubmit } from '@/app/components/features/chat/hooks';
+import { useChat } from 'ai/react';
+
+function ChatComponent() {
+  const { append, isLoading } = useChat();
+  const [input, setInput] = useState('');
+  const [isListening, setIsListening] = useState(false);
+  const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
+
+  const analyzeImage = async (imageFile: FileAttachment) => {
+    // Your image analysis logic
+    return true;
+  };
+
+  const { handleSubmit } = useChatSubmit({
+    sendMessage: (message, options) => {
+      append({
+        role: 'user',
+        content: message.text
+      });
+    },
+    isListening,
+    toggleListening: () => setIsListening(!isListening),
+    model: 'llama-3.1-70b',
+    setInput,
+    analyzeImage,
+    setIsAnalyzingImage
+  });
+
+  return (
+    <form onSubmit={(e) => {
+      e.preventDefault();
+      handleSubmit({ text: input });
+    }}>
+      <input 
+        value={input} 
+        onChange={(e) => setInput(e.target.value)}
+      />
+      <button type="submit" disabled={isLoading}>
+        Send
+      </button>
+    </form>
+  );
+}
+```
+
+---
+
+## useChatActions
+
+Provides common chat actions like regenerating responses, clearing history, and copying messages.
+
+### Import
+
+```tsx
+import { useChatActions } from '@/app/components/features/chat/hooks';
+```
+
+### Parameters
+
+<ParamField path="reload" type="function" required>
+  Function to regenerate the last assistant response
+</ParamField>
+
+<ParamField path="clearHistory" type="function" required>
+  Function to clear all chat history
+</ParamField>
+
+<ParamField path="setInput" type="function" required>
+  Function to reset the input field
+</ParamField>
+
+### Return Value
+
+<ResponseField name="handleRegenerate" type="function">
+  Triggers regeneration of the last response
+</ResponseField>
+
+<ResponseField name="handleClear" type="function">
+  Clears chat history and input field
+</ResponseField>
+
+<ResponseField name="handleCopyMessage" type="function">
+  Copies a message to clipboard and shows toast notification
+  
+  ```tsx
+  (text: string, toast: ToastFunctions) => Promise<void>
+  ```
+</ResponseField>
+
+### Usage Example
+
+```tsx
+import { useChatActions } from '@/app/components/features/chat/hooks';
+import { useToast } from '@/app/components/ui/toast';
+
+function ChatActions() {
+  const toast = useToast();
+  const [input, setInput] = useState('');
+  
+  const { handleRegenerate, handleClear, handleCopyMessage } = useChatActions({
+    reload: () => {
+      // Trigger AI to regenerate last response
+    },
+    clearHistory: () => {
+      // Clear all messages
+    },
+    setInput
+  });
+
+  return (
+    <div>
+      <button onClick={handleRegenerate}>Regenerate</button>
+      <button onClick={handleClear}>Clear Chat</button>
+      <button onClick={() => handleCopyMessage('Message text', toast)}>
+        Copy Message
+      </button>
+    </div>
+  );
+}
+```
+
+---
+
+## useChatKeyboard
+
+Configures keyboard shortcuts for chat interactions using the global keyboard shortcuts system.
+
+### Import
+
+```tsx
+import { useChatKeyboard } from '@/app/components/features/chat/hooks';
+```
+
+### Parameters
+
+<ParamField path="onSubmit" type="function" required>
+  Callback to send the current message
+</ParamField>
+
+<ParamField path="onCancelVoice" type="function" required>
+  Callback to cancel voice recording
+</ParamField>
+
+<ParamField path="onFocusInput" type="function" required>
+  Callback to focus the input textarea
+</ParamField>
+
+<ParamField path="canSubmit" type="boolean" required>
+  Whether the current message can be submitted
+</ParamField>
+
+<ParamField path="isListening" type="boolean" required>
+  Whether voice recording is currently active
+</ParamField>
+
+### Keyboard Shortcuts
+
+The hook configures the following shortcuts:
+
+- **Ctrl+Enter** - Send message (when `canSubmit` is true)
+- **Escape** - Cancel voice recording (when recording)
+- **/** - Focus input textarea
+
+<Note>
+Shortcuts are automatically disabled during image analysis or when the chat cannot accept input.
+</Note>
+
+### Usage Example
+
+```tsx
+import { useChatKeyboard } from '@/app/components/features/chat/hooks';
+import { useRef } from 'react';
+
+function ChatInput() {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [input, setInput] = useState('');
+  const [isListening, setIsListening] = useState(false);
+  const canSend = !isLoading && Boolean(input.trim());
+
+  useChatKeyboard({
+    onSubmit: () => handleSubmit({ text: input, files: [] }),
+    onCancelVoice: () => {
+      if (isListening) {
+        setIsListening(false);
+      }
+    },
+    onFocusInput: () => textareaRef.current?.focus(),
+    canSubmit: canSend,
+    isListening
+  });
+
+  return (
+    <textarea
+      ref={textareaRef}
+      value={input}
+      onChange={(e) => setInput(e.target.value)}
+    />
+  );
+}
+```
+
+---
+
+## Complete Integration Example
+
+```tsx
+import { 
+  useChatSubmit, 
+  useChatActions, 
+  useChatKeyboard 
+} from '@/app/components/features/chat/hooks';
+import { useChat } from 'ai/react';
+import { useRef, useState } from 'react';
+import { useToast } from '@/app/components/ui/toast';
+
+function CompleteChat() {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const toast = useToast();
+  const [input, setInput] = useState('');
+  const [isListening, setIsListening] = useState(false);
+  const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
+  
+  const { 
+    messages, 
+    append, 
+    reload, 
+    isLoading,
+    setMessages 
+  } = useChat();
+
+  const analyzeImage = async (imageFile: FileAttachment) => {
+    // Gemini Vision analysis logic
+    return true;
+  };
+
+  // Submit logic
+  const { handleSubmit } = useChatSubmit({
+    sendMessage: (message, options) => {
+      append({
+        role: 'user',
+        content: message.text
+      });
+    },
+    isListening,
+    toggleListening: () => setIsListening(!isListening),
+    model: 'llama-3.1-70b',
+    setInput,
+    analyzeImage,
+    setIsAnalyzingImage
+  });
+
+  // Actions
+  const { handleRegenerate, handleClear, handleCopyMessage } = useChatActions({
+    reload,
+    clearHistory: () => setMessages([]),
+    setInput
+  });
+
+  // Keyboard shortcuts
+  const canSend = !isLoading && !isAnalyzingImage && Boolean(input.trim());
+  useChatKeyboard({
+    onSubmit: () => handleSubmit({ text: input }),
+    onCancelVoice: () => {
+      if (isListening) setIsListening(false);
+    },
+    onFocusInput: () => textareaRef.current?.focus(),
+    canSubmit: canSend,
+    isListening
+  });
+
+  return (
+    <div>
+      {/* Messages */}
+      <div>
+        {messages.map((msg) => (
+          <div key={msg.id}>
+            {msg.content}
+            <button onClick={() => handleCopyMessage(msg.content, toast)}>
+              Copy
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {/* Actions */}
+      <div>
+        <button onClick={handleRegenerate}>Regenerate</button>
+        <button onClick={handleClear}>Clear</button>
+      </div>
+
+      {/* Input */}
+      <form onSubmit={(e) => {
+        e.preventDefault();
+        handleSubmit({ text: input });
+      }}>
+        <textarea
+          ref={textareaRef}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+        />
+        <button type="submit" disabled={!canSend}>
+          Send
+        </button>
+      </form>
+    </div>
+  );
+}
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="useFileSubmission" icon="file" href="/components/hooks/use-file-submission">
+    Handle file attachments and analysis
+  </Card>
+  <Card title="useVoiceInput" icon="microphone" href="/components/hooks/use-voice">
+    Voice input and transcription
+  </Card>
+</CardGroup>

@@ -1,0 +1,463 @@
+---
+title: 'PDF Processing'
+description: 'AI-powered PDF document analysis and content extraction using Gemini Flash'
+icon: 'file-pdf'
+---
+
+## Overview
+
+The PDF Processing feature enables intelligent analysis of PDF documents using **Google Gemini 2.5 Flash**. The system can extract content, summarize key points, answer questions about documents, and process both text-based and scanned PDFs.
+
+<Info>
+Gemini Flash supports up to **1 million tokens**, making it ideal for processing large documents and technical manuals.
+</Info>
+
+## Key Capabilities
+
+<CardGroup cols={2}>
+  <Card title="Content Extraction" icon="file-lines">
+    Extract and parse text content from PDF documents
+  </Card>
+  <Card title="Document Summarization" icon="compress">
+    Generate concise summaries of long documents
+  </Card>
+  <Card title="Question Answering" icon="comments-question">
+    Ask specific questions about document content
+  </Card>
+  <Card title="Multi-Page Support" icon="files">
+    Process documents of any length up to 10MB
+  </Card>
+</CardGroup>
+
+## Server Action
+
+PDF analysis is implemented as a Next.js server action:
+
+```typescript
+export async function analyzePdf(
+  formData: FormData
+): Promise<{ text: string; success: boolean; error?: string }> {
+  try {
+    const file = formData.get('file') as File | null;
+    const prompt = formData.get('prompt') as string | null;
+    
+    if (!file) throw new Error('PDF vacío');
+    
+    // Validate file size
+    const sizeInBytes = file.size;
+    const sizeInMB = bytesToMB(sizeInBytes);
+    
+    if (sizeInMB > MAX_PDF_SIZE_MB) {
+      throw new Error(
+        `PDF demasiado grande (${sizeInMB.toFixed(1)}MB). Máximo: ${MAX_PDF_SIZE_MB}MB`
+      );
+    }
+    
+    const buffer = await file.arrayBuffer();
+    const base64Content = Buffer.from(buffer).toString('base64');
+    
+    // Process with Gemini Flash
+    const result = await generateText({
+      model: google('gemini-2.5-flash'),
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: prompt || 'Analiza este documento PDF y resume sus puntos clave.',
+            },
+            {
+              type: 'file',
+              data: base64Content,
+              mediaType: 'application/pdf',
+            },
+          ],
+        },
+      ],
+    });
+    
+    return { text: result.text, success: true };
+  } catch (error: unknown) {
+    logger.error('Error análisis de PDF', error as Error);
+    const errorMessage = error instanceof Error 
+      ? error.message 
+      : 'Error desconocido al analizar PDF';
+    return { text: '', success: false, error: errorMessage };
+  }
+}
+```
+
+## Integration with Chat
+
+PDFs are processed when uploaded to the chat interface:
+
+<Steps>
+  <Step title="File Detection">
+    System detects PDF attachment in the chat input
+    
+    ```typescript
+    const pdfFile = message.files?.find(
+      (file) => file.mediaType === 'application/pdf'
+    );
+    ```
+  </Step>
+  
+  <Step title="Size Validation">
+    Validate file size before processing
+    
+    ```typescript
+    const limitBytes = MAX_PDF_SIZE_BYTES;
+    if (fileSize > limitBytes) {
+      throw new Error(
+        `El archivo excede el límite de ${bytesToMB(limitBytes)}MB`
+      );
+    }
+    ```
+  </Step>
+  
+  <Step title="Base64 Encoding">
+    Convert PDF to base64 for API transmission
+    
+    ```typescript
+    const response = await fetch(pdfFile.url);
+    const blob = await response.blob();
+    
+    const fileDataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+    ```
+  </Step>
+  
+  <Step title="User Message">
+    Add user message with PDF attachment to chat
+    
+    ```typescript
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `user-${Date.now()}`,
+        role: 'user',
+        content: userText,
+        parts: [
+          { type: 'text', text: userText },
+          { type: 'file', data: fileDataUrl, mediaType: 'application/pdf' },
+        ],
+        createdAt: new Date(),
+      },
+    ]);
+    ```
+  </Step>
+  
+  <Step title="Analysis">
+    Call server action to process the PDF
+    
+    ```typescript
+    const formData = new FormData();
+    formData.append('file', blob, fileName);
+    if (customPrompt) {
+      formData.append('prompt', customPrompt);
+    }
+    
+    const result = await analyzePdf(formData);
+    ```
+  </Step>
+  
+  <Step title="Display Results">
+    Add analysis result as assistant message
+    
+    ```typescript
+    if (result.success && result.text) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `analysis-${Date.now()}`,
+          role: 'assistant',
+          content: result.text,
+          parts: [{ type: 'text', text: result.text }],
+          createdAt: new Date(),
+        },
+      ]);
+      
+      toast.success('PDF analizado', 'El análisis se ha agregado al chat');
+    }
+    ```
+  </Step>
+</Steps>
+
+## File Submission Hook
+
+The `useFileSubmission` hook handles both PDF and image uploads:
+
+```typescript
+export function useFileSubmission({
+  setMessages,
+  sendMessage,
+  isListening,
+  toggleListening,
+}: UseFileSubmissionParams): UseFileSubmissionReturn {
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analyzingFileType, setAnalyzingFileType] = useState<'image' | 'pdf' | null>(null);
+  
+  const handleSubmit = useCallback(async (message: PromptInputMessage) => {
+    // Check for supported files
+    const imageFile = message.files?.find(
+      (file) => file.mediaType?.startsWith('image/')
+    );
+    const pdfFile = message.files?.find(
+      (file) => file.mediaType === 'application/pdf'
+    );
+    const targetFile = imageFile || pdfFile;
+    
+    if (targetFile && targetFile.url) {
+      setIsAnalyzing(true);
+      const isPdf = targetFile.mediaType === 'application/pdf';
+      setAnalyzingFileType(isPdf ? 'pdf' : 'image');
+      
+      try {
+        // Process file...
+        if (isPdf) {
+          result = await analyzePdf(formData);
+        } else {
+          result = await analyzePartImage(formData);
+        }
+        
+        // Handle results...
+      } finally {
+        setIsAnalyzing(false);
+        setAnalyzingFileType(null);
+      }
+    }
+  }, [setMessages, sendMessage]);
+  
+  return { handleSubmit, isAnalyzing, analyzingFileType };
+}
+```
+
+## Custom Analysis Prompts
+
+Provide specific instructions for document analysis:
+
+<Tabs>
+  <Tab title="Summarization">
+    ```typescript
+    const formData = new FormData();
+    formData.append('file', pdfBlob, 'manual.pdf');
+    formData.append('prompt', 'Proporciona un resumen ejecutivo de este documento en 3-5 puntos clave.');
+    
+    const result = await analyzePdf(formData);
+    ```
+  </Tab>
+  
+  <Tab title="Question Answering">
+    ```typescript
+    const formData = new FormData();
+    formData.append('file', pdfBlob, 'specification.pdf');
+    formData.append('prompt', '¿Cuáles son los requisitos de mantenimiento mencionados en el documento?');
+    
+    const result = await analyzePdf(formData);
+    ```
+  </Tab>
+  
+  <Tab title="Data Extraction">
+    ```typescript
+    const formData = new FormData();
+    formData.append('file', pdfBlob, 'invoice.pdf');
+    formData.append('prompt', 'Extrae todos los números de parte y cantidades mencionados.');
+    
+    const result = await analyzePdf(formData);
+    ```
+  </Tab>
+  
+  <Tab title="Compliance Check">
+    ```typescript
+    const formData = new FormData();
+    formData.append('file', pdfBlob, 'procedure.pdf');
+    formData.append('prompt', 'Identifica cualquier procedimiento de seguridad mencionado y verifica que cumple con las normas ISO.');
+    
+    const result = await analyzePdf(formData);
+    ```
+  </Tab>
+</Tabs>
+
+## File Size Limits
+
+```typescript
+// From app/config/limits.ts
+export const MAX_PDF_SIZE_MB = 10;
+export const MAX_PDF_SIZE_BYTES = 10 * 1024 * 1024;
+
+export const SUPPORTED_PDF_MIME_TYPES = ['application/pdf'];
+```
+
+<Warning>
+PDF files are limited to **10MB**. Gemini can handle up to 2GB, but we limit to 10MB for better user experience and faster processing.
+</Warning>
+
+## Loading States
+
+Provide feedback during PDF processing:
+
+```typescript
+<ChatStatusIndicators
+  isAnalyzingImage={isAnalyzing}
+  fileType={analyzingFileType || 'image'}
+  // ... other props
+/>
+```
+
+The chat displays:
+- **"Analizando PDF..."** while processing
+- Progress indicators during upload
+- Success/error messages after completion
+
+## Error Handling
+
+Comprehensive error handling for common issues:
+
+```typescript
+if (result.success && result.text) {
+  // Success: Display analysis
+  displayAnalysis(result.text);
+} else {
+  // Error: Show user-friendly message
+  const errorMsg = `❌ Error al analizar PDF: ${result.error || 'Error desconocido'}`;
+  
+  setMessages((prev) => [
+    ...prev,
+    {
+      id: `error-${Date.now()}`,
+      role: 'assistant',
+      content: errorMsg,
+      parts: [{ type: 'text', text: errorMsg }],
+      createdAt: new Date(),
+    },
+  ]);
+  
+  toast.error('Error de análisis', result.error || 'No se pudo analizar el PDF');
+}
+```
+
+## Common Error Types
+
+<AccordionGroup>
+  <Accordion title="Error Types & Solutions">
+    | Error | Cause | Solution |
+    | --- | --- | --- |
+    | File too large | PDF exceeds 10MB | Compress PDF or split into smaller files |
+    | Invalid format | Not a valid PDF | Ensure file is a proper PDF document |
+    | Corrupted file | PDF cannot be read | Try re-generating or repairing the PDF |
+    | API quota | Gemini API limit reached | Wait for quota reset or upgrade plan |
+    | Network error | Connection issue | Check internet connection and retry |
+  </Accordion>
+</AccordionGroup>
+
+## Performance Considerations
+
+<CardGroup cols={2}>
+  <Card title="Large Documents" icon="file">
+    Processing time increases with document length. Consider pagination for very large files.
+  </Card>
+  <Card title="Token Limits" icon="calculator">
+    Gemini Flash supports 1M tokens (~750k words), sufficient for most technical documents.
+  </Card>
+  <Card title="Concurrent Requests" icon="layer-group">
+    Limit concurrent PDF analyses to prevent API rate limiting.
+  </Card>
+  <Card title="Caching" icon="database">
+    Consider caching analysis results for frequently accessed documents.
+  </Card>
+</CardGroup>
+
+## Best Practices
+
+<Steps>
+  <Step title="Specific Prompts">
+    Provide clear, specific prompts for better analysis results:
+    - ❌ "Analyze this PDF"
+    - ✅ "Extract the maintenance schedule from pages 5-10"
+  </Step>
+  
+  <Step title="File Optimization">
+    Optimize PDFs before upload:
+    - Remove unnecessary images
+    - Compress when possible
+    - Use text-based PDFs instead of scanned images when available
+  </Step>
+  
+  <Step title="Context Preservation">
+    Include relevant context in your prompts:
+    ```typescript
+    formData.append('prompt', 
+      'Este es un manual de mantenimiento industrial. ' +
+      'Extrae todos los procedimientos de calibración mencionados.'
+    );
+    ```
+  </Step>
+  
+  <Step title="Error Recovery">
+    Always provide options to retry or modify the request:
+    - Allow re-upload with different prompts
+    - Suggest file optimization for large files
+    - Provide fallback options when analysis fails
+  </Step>
+</Steps>
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="Technical Documentation">
+    - Extract specifications and requirements
+    - Identify maintenance procedures
+    - Parse equipment manuals
+    - Analyze compliance documents
+  </Accordion>
+  
+  <Accordion title="Reports & Analytics">
+    - Summarize inspection reports
+    - Extract key metrics and findings
+    - Identify trends and patterns
+    - Generate executive summaries
+  </Accordion>
+  
+  <Accordion title="Compliance & Safety">
+    - Verify safety procedure compliance
+    - Extract hazard warnings
+    - Identify required certifications
+    - Parse regulatory documents
+  </Accordion>
+  
+  <Accordion title="Training Materials">
+    - Answer questions about procedures
+    - Extract learning objectives
+    - Identify required skills
+    - Generate training summaries
+  </Accordion>
+</AccordionGroup>
+
+## Configuration
+
+```bash
+# .env.local
+GOOGLE_GENERATIVE_AI_API_KEY=your_api_key_here
+
+# Optional: Adjust file size limits in config
+MAX_PDF_SIZE_MB=10
+```
+
+## Related Features
+
+<CardGroup cols={3}>
+  <Card title="Multimodal Chat" icon="messages" href="/features/multimodal-chat">
+    Full chat interface with all modalities
+  </Card>
+  <Card title="Voice Commands" icon="microphone" href="/features/voice-commands">
+    Voice transcription and commands
+  </Card>
+  <Card title="Image Analysis" icon="image" href="/features/image-analysis">
+    Visual recognition capabilities
+  </Card>
+</CardGroup>

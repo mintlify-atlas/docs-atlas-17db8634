@@ -1,0 +1,586 @@
+---
+title: 'AI Services'
+description: 'Specialized AI services for checklist generation, summaries, and work order closeout'
+icon: 'brain-circuit'
+---
+
+## Overview
+
+The AI Services module provides specialized services that extend `BaseAIService` to generate domain-specific content using GROQ AI models. Each service handles a specific task type with optimized prompts, caching, and error handling.
+
+### Available Services
+
+<CardGroup cols={3}>
+  <Card title="Checklist AI" icon="list-check" href="#checklist-ai-service">
+    Generate maintenance checklists
+  </Card>
+  <Card title="Activity Summary" icon="file-lines" href="#activity-summary-ai-service">
+    Professional activity summaries
+  </Card>
+  <Card title="Work Order Closeout" icon="clipboard-check" href="#work-order-closeout-ai-service">
+    Closeout notes generation
+  </Card>
+</CardGroup>
+
+## Common Features
+
+All AI services share these capabilities:
+
+- **Caching**: Redis-backed caching to reduce API calls
+- **Retry Logic**: Exponential backoff with configurable retries
+- **Validation**: Zod schema validation for inputs/outputs
+- **Timeout Management**: Configurable timeouts per service
+- **Error Handling**: Typed error responses
+- **Logging**: Structured logging for debugging
+
+---
+
+## Checklist AI Service
+
+Generates maintenance checklists based on asset and task types.
+
+### Class Definition
+
+```typescript
+export class ChecklistAIService extends BaseAIService {
+  constructor()
+  async generateChecklist(
+    request: ChecklistGenerationRequest
+  ): Promise<ChecklistGenerationResult>
+}
+```
+
+### Configuration
+
+- **Model**: `llama-3.1-70b-versatile` (GROQ)
+- **Timeout**: 30 seconds
+- **Max Retries**: 3
+- **Cache TTL**: 7 days (604800s)
+
+### generateChecklist()
+
+Generates a maintenance checklist with AI.
+
+```typescript
+async generateChecklist(
+  request: ChecklistGenerationRequest
+): Promise<ChecklistGenerationResult>
+```
+
+#### Parameters
+
+<ParamField path="request" type="ChecklistGenerationRequest" required>
+  <Expandable title="properties">
+    <ParamField path="assetType" type="AssetType" required>
+      Type of asset (e.g., 'bomba', 'motor', 'compresor')
+    </ParamField>
+    <ParamField path="taskType" type="TaskType" required>
+      Type of maintenance ('preventivo', 'correctivo', 'predictivo')
+    </ParamField>
+    <ParamField path="customInstructions" type="string" optional>
+      Additional instructions for checklist generation
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+#### Returns
+
+<ResponseField name="result" type="ChecklistGenerationResult">
+  <Expandable title="properties">
+    <ResponseField name="success" type="boolean">
+      Whether generation succeeded
+    </ResponseField>
+    <ResponseField name="checklist" type="Checklist" optional>
+      Generated checklist object with items, categories, and metadata
+    </ResponseField>
+    <ResponseField name="error" type="string" optional>
+      Error message if generation failed
+    </ResponseField>
+    <ResponseField name="cached" type="boolean" optional>
+      Whether result was retrieved from cache
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+#### Example
+
+```typescript
+import { ChecklistAIService } from '@/app/lib/services/checklist-ai-service';
+
+const service = new ChecklistAIService();
+
+const result = await service.generateChecklist({
+  assetType: 'bomba',
+  taskType: 'preventivo',
+  customInstructions: 'Incluir verificación de temperatura y vibración',
+});
+
+if (result.success && result.checklist) {
+  console.log(result.checklist.title);
+  console.log(result.checklist.items); // ChecklistItem[]
+  console.log(result.cached);          // true if from cache
+}
+```
+
+### Checklist Structure
+
+```typescript
+interface Checklist {
+  id: string;
+  title: string;
+  description: string;
+  assetType: AssetType;
+  taskType: TaskType;
+  items: ChecklistItem[];
+  createdAt: Date;
+  isTemplate: boolean;
+  metadata: {
+    generatedBy: 'ai';
+    version: string;
+  };
+}
+
+interface ChecklistItem {
+  id: string;
+  description: string;
+  category: 'seguridad' | 'operacional' | 'mecanico' | 'electrico' | 'documentacion';
+  order: number;
+  required: boolean;
+  notes?: string;
+}
+```
+
+---
+
+## Activity Summary AI Service
+
+Generates professional summaries of maintenance activities.
+
+### Class Definition
+
+```typescript
+export class ActivitySummaryAIService extends BaseAIService {
+  constructor()
+  async generateSummary(
+    request: ActivitySummaryRequest
+  ): Promise<SummaryGenerationResult>
+}
+```
+
+### Configuration
+
+- **Model**: `llama-3.1-70b-versatile` (GROQ)
+- **Timeout**: 30 seconds
+- **Max Retries**: 3
+- **Cache TTL**: 1 hour (3600s)
+
+### generateSummary()
+
+Generates a professional activity summary with AI.
+
+```typescript
+async generateSummary(
+  request: ActivitySummaryRequest
+): Promise<SummaryGenerationResult>
+```
+
+#### Parameters
+
+<ParamField path="request" type="ActivitySummaryRequest" required>
+  <Expandable title="properties">
+    <ParamField path="assetType" type="string" required>
+      Asset type being summarized
+    </ParamField>
+    <ParamField path="taskType" type="string" required>
+      Task type performed
+    </ParamField>
+    <ParamField path="activities" type="string" required>
+      Raw activity descriptions to summarize
+    </ParamField>
+    <ParamField path="style" type="'executive' | 'technical' | 'detailed'" required>
+      Writing style for the summary
+    </ParamField>
+    <ParamField path="detailLevel" type="'brief' | 'normal' | 'comprehensive'" required>
+      Level of detail to include
+    </ParamField>
+    <ParamField path="context" type="string" optional>
+      Additional context for summary generation
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+#### Returns
+
+<ResponseField name="result" type="SummaryGenerationResult">
+  <Expandable title="properties">
+    <ResponseField name="success" type="boolean">
+      Whether generation succeeded
+    </ResponseField>
+    <ResponseField name="summary" type="ActivitySummary" optional>
+      Generated summary with sections and metadata
+    </ResponseField>
+    <ResponseField name="error" type="string" optional>
+      Error message if generation failed
+    </ResponseField>
+    <ResponseField name="cached" type="boolean" optional>
+      Whether result was from cache
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+#### Example
+
+```typescript
+import { ActivitySummaryAIService } from '@/app/lib/services/activity-summary-ai-service';
+
+const service = new ActivitySummaryAIService();
+
+const result = await service.generateSummary({
+  assetType: 'bomba',
+  taskType: 'preventivo',
+  activities: `
+    - Revisión de rodamientos
+    - Cambio de aceite lubricante
+    - Inspección de sellos mecánicos
+    - Medición de vibración
+  `,
+  style: 'technical',
+  detailLevel: 'normal',
+});
+
+if (result.success && result.summary) {
+  console.log(result.summary.title);
+  console.log(result.summary.executive);   // Executive summary
+  console.log(result.summary.sections);     // Detailed sections
+  console.log(result.summary.metadata.wordCount);
+  console.log(result.summary.metadata.readingTime); // minutes
+}
+```
+
+### Summary Structure
+
+```typescript
+interface ActivitySummary {
+  id: string;
+  title: string;
+  executive: string;              // Brief executive summary
+  sections: SummarySection[];
+  assetType: string;
+  taskType: string;
+  style: 'executive' | 'technical' | 'detailed';
+  detailLevel: 'brief' | 'normal' | 'comprehensive';
+  createdAt: Date;
+  metadata: {
+    wordCount: number;
+    readingTime: number;          // minutes
+    generatedBy: 'ai';
+    version: string;
+  };
+}
+
+interface SummarySection {
+  title: string;
+  content: string;
+  order: number;
+}
+```
+
+---
+
+## Work Order Closeout AI Service
+
+Generates professional closeout notes for completed work orders.
+
+### Class Definition
+
+```typescript
+export class WorkOrderCloseoutAIService extends BaseAIService {
+  constructor()
+  async generateCloseoutNotes(
+    request: CloseoutNotesRequest
+  ): Promise<CloseoutGenerationResult>
+}
+```
+
+### Configuration
+
+- **Model**: `llama-3.1-70b-versatile` (GROQ)
+- **Timeout**: 30 seconds
+- **Max Retries**: 3
+- **Cache TTL**: 30 minutes (1800s)
+
+### generateCloseoutNotes()
+
+Generates professional closeout notes for a work order.
+
+```typescript
+async generateCloseoutNotes(
+  request: CloseoutNotesRequest
+): Promise<CloseoutGenerationResult>
+```
+
+#### Parameters
+
+<ParamField path="request" type="CloseoutNotesRequest" required>
+  <Expandable title="properties">
+    <ParamField path="workOrderId" type="string" required>
+      Work order identifier
+    </ParamField>
+    <ParamField path="workOrderData" type="object" required>
+      Complete work order data including:
+      - `title`: Work order title
+      - `description`: Original description
+      - `assetType`: Asset type
+      - `taskType`: Task type
+      - `priority`: Priority level
+      - `activities`: Array of performed activities
+      - `materialsUsed`: Array of materials/parts used
+      - `timeSpent`: Time breakdown
+      - `issues`: Array of issues encountered
+    </ParamField>
+    <ParamField path="style" type="'formal' | 'concise' | 'detailed'" required>
+      Writing style for closeout notes
+    </ParamField>
+    <ParamField path="includeRecommendations" type="boolean" optional>
+      Whether to include future recommendations
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+#### Returns
+
+<ResponseField name="result" type="CloseoutGenerationResult">
+  <Expandable title="properties">
+    <ResponseField name="success" type="boolean">
+      Whether generation succeeded
+    </ResponseField>
+    <ResponseField name="notes" type="CloseoutNotes" optional>
+      Generated closeout notes
+    </ResponseField>
+    <ResponseField name="error" type="string" optional>
+      Error message if generation failed
+    </ResponseField>
+    <ResponseField name="cached" type="boolean" optional>
+      Whether result was from cache
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+#### Example
+
+```typescript
+import { WorkOrderCloseoutAIService } from '@/app/lib/services/work-order-closeout-ai-service';
+
+const service = new WorkOrderCloseoutAIService();
+
+const result = await service.generateCloseoutNotes({
+  workOrderId: 'WO-2024-001',
+  workOrderData: {
+    title: 'Mantenimiento preventivo bomba B-101',
+    description: 'Mantenimiento trimestral programado',
+    assetType: 'bomba',
+    taskType: 'preventivo',
+    priority: 'normal',
+    activities: [
+      'Cambio de rodamientos',
+      'Reemplazo de sellos',
+      'Lubricación',
+    ],
+    materialsUsed: [
+      { name: 'Rodamiento 6308', quantity: 2 },
+      { name: 'Sello mecánico', quantity: 1 },
+    ],
+    timeSpent: { preparation: 30, execution: 120, testing: 30 },
+    issues: [],
+  },
+  style: 'formal',
+  includeRecommendations: true,
+});
+
+if (result.success && result.notes) {
+  console.log(result.notes.summary);
+  console.log(result.notes.workPerformed);
+  console.log(result.notes.recommendations);
+}
+```
+
+### Closeout Notes Structure
+
+```typescript
+interface CloseoutNotes {
+  id: string;
+  workOrderId: string;
+  summary: string;                    // Executive summary
+  workPerformed: string;              // Detailed work description
+  findings: string;                   // Findings and observations
+  recommendations: string | null;     // Future recommendations
+  materialsUsed: string;              // Materials summary
+  timeBreakdown: string;              // Time analysis
+  nextActions: string | null;         // Follow-up actions
+  style: 'formal' | 'concise' | 'detailed';
+  createdAt: Date;
+  metadata: {
+    wordCount: number;
+    generatedBy: 'ai';
+    version: string;
+  };
+}
+```
+
+---
+
+## Base AI Service
+
+All AI services extend `BaseAIService` which provides:
+
+### Core Features
+
+```typescript
+class BaseAIService {
+  // Retry with exponential backoff
+  protected async executeWithRetry<T>(
+    fn: () => Promise<T>
+  ): Promise<T>
+
+  // Cache management
+  protected async checkCache<T>(key: string): Promise<T | null>
+  protected async setCache<T>(key: string, value: T): Promise<void>
+  protected buildCacheKey(parts: string[]): string
+
+  // Validation
+  protected validate<T>(schema: z.ZodType<T>, data: unknown): T
+}
+```
+
+### Configuration
+
+```typescript
+interface BaseAIServiceConfig {
+  serviceName: string;      // Service identifier for logging
+  timeoutMs: number;        // Request timeout
+  maxRetries: number;       // Max retry attempts
+  enableCaching: boolean;   // Enable Redis caching
+  cacheTTL: number;         // Cache TTL in seconds
+}
+```
+
+---
+
+## Error Handling
+
+All services return result objects instead of throwing errors:
+
+```typescript
+if (!result.success) {
+  console.error(result.error);
+  // Handle error gracefully
+}
+```
+
+Common error scenarios:
+
+- **Validation errors**: Invalid input parameters
+- **AI errors**: Model failures, malformed responses
+- **Timeout errors**: Request exceeded timeout
+- **Network errors**: Connection issues
+
+---
+
+## Performance Optimization
+
+### Caching Strategy
+
+- **Checklist**: 7 days (templates rarely change)
+- **Activity Summary**: 1 hour (activities may evolve)
+- **Closeout Notes**: 30 minutes (work orders in progress)
+
+### Cache Keys
+
+Generated from request parameters:
+
+```typescript
+// Checklist
+`checklist:${assetType}:${taskType}:${customInstructions}`
+
+// Activity Summary
+`summary:${assetType}:${taskType}:${style}:${detailLevel}:${activities.slice(0,100)}`
+
+// Closeout
+`closeout:${workOrderId}:${style}:${includeRecs}:${activities.slice(0,2).join(':')}`
+```
+
+### Retry Logic
+
+Exponential backoff for transient failures:
+
+```typescript
+Attempt 1: immediate
+Attempt 2: 1s delay
+Attempt 3: 2s delay
+Attempt 4: 4s delay (if maxRetries = 3)
+```
+
+---
+
+## Usage in Server Actions
+
+```typescript
+'use server';
+
+import { ChecklistAIService } from '@/app/lib/services/checklist-ai-service';
+
+export async function generateChecklistAction(
+  assetType: string,
+  taskType: string
+) {
+  const service = new ChecklistAIService();
+  
+  const result = await service.generateChecklist({
+    assetType: assetType as any,
+    taskType: taskType as any,
+  });
+
+  if (!result.success) {
+    return { error: result.error };
+  }
+
+  return { checklist: result.checklist };
+}
+```
+
+---
+
+## Testing
+
+All services support dependency injection for testing:
+
+```typescript
+import { ChecklistAIService } from '@/app/lib/services/checklist-ai-service';
+import { vi } from 'vitest';
+
+// Mock BaseAIService dependencies
+const mockLogger = { info: vi.fn(), error: vi.fn() };
+const mockCache = { get: vi.fn(), set: vi.fn() };
+
+const service = new ChecklistAIService();
+// Override deps via protected properties in tests
+```
+
+---
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Chat Service" icon="messages" href="/api-reference/services/chat-service">
+    Main chat service orchestration
+  </Card>
+  <Card title="AI Constants" icon="sliders" href="/api-reference/utils/ai-constants">
+    Model configurations and timeouts
+  </Card>
+  <Card title="Schemas" icon="code" href="/api-reference/utils/schemas">
+    Request/response validation schemas
+  </Card>
+  <Card title="Base AI Service" icon="layer-group" href="/api-reference/ai/base-service">
+    Shared AI service functionality
+  </Card>
+</CardGroup>

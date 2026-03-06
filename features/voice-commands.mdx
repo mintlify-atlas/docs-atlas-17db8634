@@ -1,0 +1,361 @@
+---
+title: 'Voice Commands'
+description: 'Dual-mode voice recognition with AI-powered transcription and command parsing'
+icon: 'microphone'
+---
+
+## Overview
+
+Gima AI Chatbot features a sophisticated voice input system with dual-mode operation: **Gemini AI transcription** for high accuracy and **Web Speech API fallback** for offline capability. The system automatically switches modes based on availability and network conditions.
+
+<Info>
+Voice commands use **Gemini 2.5 Flash Lite** for transcription and command parsing, ensuring high accuracy with low latency.
+</Info>
+
+## Voice Input Modes
+
+<Tabs>
+  <Tab title="Gemini AI Mode">
+    ### Server-Side Transcription
+    
+    The primary mode uses Google's Gemini API for audio transcription:
+    
+    **Advantages:**
+    - Higher accuracy than browser-based recognition
+    - Consistent across all browsers and devices
+    - Advanced prompt engineering for clean output
+    - Automatic timestamp and filler word removal
+    
+    **Requirements:**
+    - Active internet connection
+    - Valid `GOOGLE_GENERATIVE_AI_API_KEY`
+    - Browser support for `MediaRecorder` API
+    
+    ```typescript
+    // Transcription with Gemini
+    export async function transcribeAudio(
+      audioDataUrl: string,
+      mimeType: string = 'audio/webm'
+    ): Promise<{ text: string; success: boolean; error?: string }> {
+      const result = await generateText({
+        model: google('gemini-2.5-flash-lite'),
+        temperature: 0,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: VOICE_PROMPT },
+              { type: 'file', data: base64Content, mediaType: mimeType },
+            ],
+          },
+        ],
+      });
+      
+      // Clean timestamps and normalize spacing
+      const cleanText = result.text
+        .replace(/\d{1,2}:\d{2}/g, '')
+        .replace(/\n+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      
+      return { text: cleanText, success: true };
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Web Speech API">
+    ### Browser-Based Recognition
+    
+    Fallback mode using the browser's native Speech Recognition API:
+    
+    **Advantages:**
+    - Works offline
+    - No API costs
+    - Real-time interim results
+    - Zero server latency
+    
+    **Limitations:**
+    - Browser and OS dependent
+    - Not available in all browsers (Safari, older Firefox)
+    - Accuracy varies by environment
+    
+    ```typescript
+    // Native speech recognition setup
+    const startNativeListening = useCallback(() => {
+      const SpeechRecognition = 
+        window.SpeechRecognition || window.webkitSpeechRecognition;
+      
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'es-ES';
+      
+      recognition.onresult = (event) => {
+        let fullTranscript = '';
+        for (let i = 0; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            fullTranscript += event.results[i][0].transcript;
+          }
+        }
+        setTranscript(fullTranscript);
+        onTranscript?.(fullTranscript);
+      };
+      
+      recognition.start();
+    }, [language]);
+    ```
+  </Tab>
+</Tabs>
+
+## Automatic Mode Switching
+
+The system intelligently switches between modes based on availability:
+
+<Steps>
+  <Step title="Capability Detection">
+    On mount, the system checks for:
+    - `MediaRecorder` API support (Gemini mode)
+    - `SpeechRecognition` API support (fallback mode)
+    - Network connectivity status
+  </Step>
+  
+  <Step title="Mode Selection">
+    ```typescript
+    useEffect(() => {
+      const hasMediaRecorder = !!window.MediaRecorder;
+      const hasSpeechRecognition = !!getSpeechRecognition();
+      
+      setIsSupported(hasMediaRecorder || hasSpeechRecognition);
+      
+      // Prefer Gemini if available AND online
+      if (hasMediaRecorder && navigator.onLine) {
+        setMode('gemini');
+      } else if (hasSpeechRecognition) {
+        setMode('native');
+      }
+    }, []);
+    ```
+  </Step>
+  
+  <Step title="Error Handling & Fallback">
+    If Gemini transcription fails (network issues, quota exceeded), the system automatically falls back to Web Speech API:
+    
+    ```typescript
+    catch (err) {
+      const hasSpeechRecognition = !!getSpeechRecognition();
+      
+      if (hasSpeechRecognition) {
+        const userFriendlyError = simplifyGeminiError(err.message);
+        setError(userFriendlyError);
+        setMode('native');
+      } else {
+        setError(VOICE_MESSAGES.BROWSER_NOT_SUPPORTED);
+      }
+    }
+    ```
+  </Step>
+</Steps>
+
+## Voice Command Parsing
+
+Transcripts can be parsed into structured commands using AI:
+
+```typescript
+// Execute voice command
+const result = await executeVoiceCommand(
+  "Crear orden urgente para la UMA",
+  { minConfidence: 0.7 }
+);
+
+if (result.success) {
+  console.log(result.command.action); // 'create_work_order'
+  console.log(result.command.equipment); // 'UMA'
+  console.log(result.command.priority); // 'urgent'
+}
+```
+
+### Command Parser Service
+
+The `VoiceCommandParserService` uses Gemini to interpret natural language:
+
+```typescript
+export class VoiceCommandParserService extends BaseAIService {
+  public async parseCommand(
+    transcript: string,
+    options?: VoiceParserOptions
+  ): Promise<{ success: boolean; command?: VoiceCommand; error?: string }> {
+    const result = await generateText({
+      model: google('gemini-2.5-flash-lite'),
+      messages: [
+        {
+          role: 'system',
+          content: MASTER_VOICE_PROMPT + contextPrompt,
+        },
+        {
+          role: 'user',
+          content: transcript,
+        },
+      ],
+      temperature: 0,
+    });
+    
+    // Parse and validate with Zod schema
+    const validation = VoiceCommandSchema.safeParse(parsed);
+    
+    if (validation.success && command.confidence >= minConfidence) {
+      return { success: true, command: validation.data };
+    }
+    
+    return { success: false, error: 'Low confidence' };
+  }
+}
+```
+
+## Audio Format Detection
+
+The system dynamically detects the best audio format for the browser:
+
+```typescript
+export function getSupportedAudioMimeType(): string {
+  const types = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/ogg;codecs=opus',
+    'audio/mp4',
+  ];
+  
+  for (const type of types) {
+    if (MediaRecorder.isTypeSupported(type)) {
+      return type;
+    }
+  }
+  
+  throw new Error('No supported audio MIME type found');
+}
+```
+
+<Info>
+**Safari Support**: Safari on iOS/macOS typically uses `audio/mp4`, while Chrome uses `audio/webm;codecs=opus`.
+</Info>
+
+## File Size Limits
+
+Audio transcription enforces size limits to ensure fast processing:
+
+```typescript
+// From app/config/limits.ts
+export const MAX_AUDIO_SIZE_MB = 5;
+export const MAX_AUDIO_SIZE_BYTES = 5 * 1024 * 1024;
+
+// Validation in action
+const sizeInBytes = getBase64Size(base64Content);
+const sizeInMB = bytesToMB(sizeInBytes);
+
+if (sizeInMB > MAX_AUDIO_SIZE_MB) {
+  throw new Error(
+    `Audio demasiado grande (${sizeInMB.toFixed(1)}MB). Máximo: ${MAX_AUDIO_SIZE_MB}MB`
+  );
+}
+```
+
+## Using the Voice Input Hook
+
+```typescript
+import { useVoiceInput } from '@/app/hooks/use-voice-input';
+
+function VoiceInputComponent() {
+  const {
+    isListening,
+    isProcessing,
+    transcript,
+    isSupported,
+    mode,
+    toggleListening,
+    error
+  } = useVoiceInput({
+    onTranscript: (text) => {
+      console.log('Transcribed:', text);
+      setInputValue(text);
+    },
+    onError: (error) => {
+      console.error('Voice error:', error);
+    },
+    language: 'es-ES'
+  });
+  
+  return (
+    <div>
+      <button 
+        onClick={toggleListening} 
+        disabled={isProcessing || !isSupported}
+      >
+        {isListening ? 'Stop Recording' : 'Start Recording'}
+      </button>
+      
+      <div>
+        Mode: {mode} | Status: {isListening ? 'Listening' : 'Idle'}
+      </div>
+      
+      {error && <div className="error">{error}</div>}
+      {transcript && <div className="transcript">{transcript}</div>}
+    </div>
+  );
+}
+```
+
+## Error Messages
+
+User-friendly error messages are provided for common issues:
+
+<AccordionGroup>
+  <Accordion title="Error Types">
+    | Error Type | Message | Resolution |
+    | --- | --- | --- |
+    | Quota Exceeded | "⚠️ Límite de API alcanzado · Modo local activo" | API quota limit reached, fallback activated |
+    | API Key Missing | "🔑 API Key no configurada · Modo local activo" | Set `GOOGLE_GENERATIVE_AI_API_KEY` |
+    | Permission Denied | "🚫 Permiso de micrófono denegado" | Grant microphone permissions in browser |
+    | No Connection | "📡 Sin conexión · Modo local activo" | Check internet connection |
+    | Browser Not Supported | "❌ Tu navegador no soporta reconocimiento de voz" | Use a modern browser |
+  </Accordion>
+</AccordionGroup>
+
+## Configuration
+
+```bash
+# .env.local
+GOOGLE_GENERATIVE_AI_API_KEY=your_api_key_here
+
+# Optional: Custom voice prompt
+VOICE_PROMPT="Transcribe this audio accurately..."
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="User Feedback" icon="comment">
+    Show visual indicators during recording and processing states
+  </Card>
+  <Card title="Graceful Degradation" icon="shield-check">
+    Always provide fallback options when features aren't available
+  </Card>
+  <Card title="Privacy" icon="lock">
+    Inform users when audio is being sent to external APIs
+  </Card>
+  <Card title="Testing" icon="vial">
+    Test voice input across different browsers and devices
+  </Card>
+</CardGroup>
+
+## Related Features
+
+<CardGroup cols={3}>
+  <Card title="Multimodal Chat" icon="messages" href="/features/multimodal-chat">
+    Learn about the full chat experience
+  </Card>
+  <Card title="Image Analysis" icon="image" href="/features/image-analysis">
+    Explore visual recognition capabilities
+  </Card>
+  <Card title="PDF Processing" icon="file-pdf" href="/features/pdf-processing">
+    Discover document analysis features
+  </Card>
+</CardGroup>

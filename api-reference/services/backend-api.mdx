@@ -1,0 +1,469 @@
+---
+title: 'Backend API Service'
+description: 'HTTP client for Laravel REST API with authentication, pagination, and retry logic'
+icon: 'server'
+---
+
+## Overview
+
+The `BackendAPIService` is a fully-featured HTTP client for interacting with the Laravel (GIMA) backend API. It handles authentication via Bearer tokens, automatic pagination unwrapping, retry logic with exponential backoff, and timeout management optimized for Vercel Edge Functions.
+
+### Key Features
+
+- **Bearer Authentication**: Laravel Sanctum token-based auth
+- **Auto Pagination**: Unwraps Laravel `LengthAwarePaginator` responses
+- **Retry Logic**: Exponential backoff with 2 retries by default
+- **Timeout Management**: 8s default timeout (Vercel Edge compatible)
+- **Type Safety**: Full TypeScript support with Zod validation
+- **Error Handling**: Custom error types for different failure scenarios
+- **Query Building**: Automatic filter parameter serialization
+
+## Class Definition
+
+```typescript
+export class BackendAPIService {
+  constructor(
+    config: BackendAPIConfig,
+    deps?: Partial<BackendAPIDeps>
+  )
+
+  // Catalog
+  async getActivos(filtros?: ActivosFiltros): Promise<PaginatedResult<Activo>>
+
+  // Maintenance
+  async getMantenimientos(filtros?: MantenimientosFiltros): Promise<PaginatedResult<Mantenimiento>>
+  async getCalendario(filtros?: CalendarioFiltros): Promise<PaginatedResult<CalendarioMantenimiento>>
+  async getReportes(filtros?: ReportesFiltros): Promise<PaginatedResult<Reporte>>
+
+  // Inventory
+  async getRepuestos(filtros?: RepuestosFiltros): Promise<PaginatedResult<Repuesto>>
+  async getProveedores(): Promise<PaginatedResult<Proveedor>>
+}
+```
+
+## Constructor
+
+### Parameters
+
+<ParamField path="config" type="BackendAPIConfig" required>
+  API configuration object
+  
+  <Expandable title="properties">
+    <ParamField path="baseUrl" type="string" required>
+      Base URL of the Laravel API (e.g., `https://api.example.com`)
+    </ParamField>
+    <ParamField path="token" type="string" required>
+      Bearer token for authentication (Laravel Sanctum)
+    </ParamField>
+    <ParamField path="timeoutMs" type="number" default={8000}>
+      Request timeout in milliseconds
+    </ParamField>
+    <ParamField path="maxRetries" type="number" default={2}>
+      Maximum retry attempts for failed requests
+    </ParamField>
+    <ParamField path="backoffBaseMs" type="number" default={1000}>
+      Base delay for exponential backoff (in ms)
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="deps" type="Partial<BackendAPIDeps>" optional>
+  Dependency injection for testing
+  
+  <Expandable title="properties">
+    <ParamField path="fetchFn" type="typeof fetch">
+      Custom fetch implementation (defaults to global `fetch`)
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Example
+
+```typescript
+import { BackendAPIService } from '@/app/lib/services/backend-api-service';
+
+const apiService = new BackendAPIService({
+  baseUrl: 'https://api.gima.example.com',
+  token: 'your-sanctum-token',
+  timeoutMs: 10000,
+  maxRetries: 3,
+});
+```
+
+## Factory Function
+
+The recommended way to create an instance is using the factory function:
+
+```typescript
+import { createBackendAPIService } from '@/app/lib/services/backend-api-service';
+import { cookies } from 'next/headers';
+
+// In a Server Action or API Route
+const token = cookies().get('auth_token')?.value;
+if (!token) throw new Error('Not authenticated');
+
+const apiService = createBackendAPIService({ token });
+```
+
+## Methods
+
+### Catalog Methods
+
+#### getActivos()
+
+Fetch assets (activos) from the catalog with optional filters.
+
+```typescript
+async getActivos(filtros?: ActivosFiltros): Promise<PaginatedResult<Activo>>
+```
+
+**Filters:**
+
+<ParamField path="filtros" type="ActivosFiltros" optional>
+  <Expandable title="properties">
+    <ParamField path="tipo" type="string">
+      Asset category/type (triggers `/por-categoria` endpoint)
+    </ParamField>
+    <ParamField path="codigo" type="string">
+      Asset code filter
+    </ParamField>
+    <ParamField path="estado" type="string">
+      Status filter (e.g., 'activo', 'mantenimiento')
+    </ParamField>
+    <ParamField path="page" type="number">
+      Page number for pagination
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Example:**
+
+```typescript
+const result = await apiService.getActivos({
+  tipo: 'bomba',
+  estado: 'activo',
+  page: 1,
+});
+
+console.log(result.items);      // Activo[]
+console.log(result.pagination); // { page, lastPage, total, hasMore }
+```
+
+### Maintenance Methods
+
+#### getMantenimientos()
+
+Fetch maintenance records with filters.
+
+```typescript
+async getMantenimientos(
+  filtros?: MantenimientosFiltros
+): Promise<PaginatedResult<Mantenimiento>>
+```
+
+**Filters:**
+
+<ParamField path="filtros" type="MantenimientosFiltros" optional>
+  <Expandable title="properties">
+    <ParamField path="tipo" type="string">
+      Maintenance type (e.g., 'preventivo', 'correctivo')
+    </ParamField>
+    <ParamField path="estado" type="string">
+      Status (e.g., 'pendiente', 'completado')
+    </ParamField>
+    <ParamField path="activo_id" type="number">
+      Filter by specific asset ID
+    </ParamField>
+    <ParamField path="fecha_desde" type="string">
+      Start date (ISO format: YYYY-MM-DD)
+    </ParamField>
+    <ParamField path="fecha_hasta" type="string">
+      End date (ISO format: YYYY-MM-DD)
+    </ParamField>
+    <ParamField path="page" type="number">
+      Page number
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Example:**
+
+```typescript
+const result = await apiService.getMantenimientos({
+  tipo: 'preventivo',
+  estado: 'pendiente',
+  fecha_desde: '2024-01-01',
+});
+```
+
+#### getCalendario()
+
+Fetch maintenance calendar/schedule.
+
+```typescript
+async getCalendario(
+  filtros?: CalendarioFiltros
+): Promise<PaginatedResult<CalendarioMantenimiento>>
+```
+
+**Example:**
+
+```typescript
+const calendar = await apiService.getCalendario({
+  mes: '2024-01',
+  tipo: 'preventivo',
+});
+```
+
+#### getReportes()
+
+Fetch maintenance reports.
+
+```typescript
+async getReportes(
+  filtros?: ReportesFiltros
+): Promise<PaginatedResult<Reporte>>
+```
+
+**Example:**
+
+```typescript
+const reports = await apiService.getReportes({
+  activo_id: 123,
+  fecha_desde: '2024-01-01',
+});
+```
+
+### Inventory Methods
+
+#### getRepuestos()
+
+Fetch spare parts inventory.
+
+```typescript
+async getRepuestos(
+  filtros?: RepuestosFiltros
+): Promise<PaginatedResult<Repuesto>>
+```
+
+**Filters:**
+
+<ParamField path="filtros" type="RepuestosFiltros" optional>
+  <Expandable title="properties">
+    <ParamField path="codigo" type="string">
+      Part code
+    </ParamField>
+    <ParamField path="nombre" type="string">
+      Part name search
+    </ParamField>
+    <ParamField path="categoria" type="string">
+      Category filter
+    </ParamField>
+    <ParamField path="stock_minimo" type="boolean">
+      Filter parts below minimum stock
+    </ParamField>
+    <ParamField path="page" type="number">
+      Page number
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Example:**
+
+```typescript
+const result = await apiService.getRepuestos({
+  stock_minimo: true,
+  categoria: 'filtros',
+});
+```
+
+#### getProveedores()
+
+Fetch supplier list.
+
+```typescript
+async getProveedores(): Promise<PaginatedResult<Proveedor>>
+```
+
+**Example:**
+
+```typescript
+const suppliers = await apiService.getProveedores();
+```
+
+## Response Types
+
+### PaginatedResult
+
+All methods return paginated results:
+
+```typescript
+interface PaginatedResult<T> {
+  items: T[];            // Array of items
+  pagination: {
+    page: number;        // Current page
+    lastPage: number;    // Total pages
+    perPage: number;     // Items per page
+    total: number;       // Total items
+    hasMore: boolean;    // Whether more pages exist
+  };
+}
+```
+
+## Error Handling
+
+### BackendAPIError
+
+Base error class for all API errors.
+
+```typescript
+class BackendAPIError extends Error {
+  statusCode?: number;
+  endpoint?: string;
+}
+```
+
+### BackendTimeoutError
+
+Thrown when request exceeds timeout.
+
+```typescript
+class BackendTimeoutError extends BackendAPIError {
+  // statusCode: 408
+  // Suggests using more specific filters
+}
+```
+
+### BackendAuthError
+
+Thrown on 401 authentication failures.
+
+```typescript
+class BackendAuthError extends BackendAPIError {
+  // statusCode: 401
+  // Indicates invalid or expired token
+}
+```
+
+### Example Error Handling
+
+```typescript
+try {
+  const result = await apiService.getActivos();
+} catch (error) {
+  if (error instanceof BackendAuthError) {
+    // Redirect to login
+    redirect('/login');
+  } else if (error instanceof BackendTimeoutError) {
+    // Suggest more specific filters
+    return { error: 'Request timeout. Try more specific filters.' };
+  } else if (error instanceof BackendAPIError) {
+    // Other API errors
+    console.error(`API error ${error.statusCode}: ${error.message}`);
+  }
+}
+```
+
+## Retry Logic
+
+The service automatically retries failed requests with exponential backoff:
+
+```typescript
+// Retry delays
+Attempt 1: immediate
+Attempt 2: 1000ms delay (backoffBaseMs * 2^0)
+Attempt 3: 2000ms delay (backoffBaseMs * 2^1)
+```
+
+### Non-Retryable Errors
+
+- **401** (Auth): No retry
+- **4xx** (except 408, 429): No retry
+- **Auth errors**: No retry
+
+### Retryable Errors
+
+- **Timeout errors**: Retries up to `maxRetries`
+- **5xx errors**: Retries with backoff
+- **Network errors**: Retries with backoff
+- **408, 429**: Retries with backoff
+
+## Usage in AI Tools
+
+The service is designed for use in AI chat tools:
+
+```typescript
+// app/lib/ai/tools/get-activos.ts
+import { createBackendAPIService } from '@/app/lib/services/backend-api-service';
+import { cookies } from 'next/headers';
+import { z } from 'zod';
+import { tool } from 'ai';
+
+export const getActivosTool = tool({
+  description: 'Busca activos en el catálogo',
+  parameters: z.object({
+    tipo: z.string().optional(),
+    estado: z.string().optional(),
+  }),
+  execute: async ({ tipo, estado }) => {
+    const token = cookies().get('auth_token')?.value;
+    if (!token) throw new Error('Not authenticated');
+
+    const api = createBackendAPIService({ token });
+    const result = await api.getActivos({ tipo, estado });
+
+    return {
+      activos: result.items,
+      total: result.pagination.total,
+    };
+  },
+});
+```
+
+## Testing
+
+Mock the fetch function for testing:
+
+```typescript
+import { BackendAPIService } from '@/app/lib/services/backend-api-service';
+import { vi } from 'vitest';
+
+const mockFetch = vi.fn();
+
+const apiService = new BackendAPIService(
+  {
+    baseUrl: 'https://test.com',
+    token: 'test-token',
+  },
+  { fetchFn: mockFetch }
+);
+
+mockFetch.mockResolvedValueOnce({
+  ok: true,
+  json: async () => ({
+    data: [{ id: 1, nombre: 'Bomba A' }],
+    meta: { current_page: 1, last_page: 1, per_page: 15, total: 1 },
+    links: { next: null },
+  }),
+});
+
+const result = await apiService.getActivos();
+expect(result.items).toHaveLength(1);
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Chat Service" icon="messages" href="/api-reference/services/chat-service">
+    AI chat service using this API client
+  </Card>
+  <Card title="Backend Schemas" icon="code" href="/api-reference/utils/backend-schemas">
+    Type definitions and Zod schemas
+  </Card>
+  <Card title="AI Tools" icon="wrench" href="/api-reference/ai/chat-tools">
+    Tools that consume this API
+  </Card>
+  <Card title="Laravel API Docs" icon="book" href="/backend/api">
+    Complete backend API documentation
+  </Card>
+</CardGroup>

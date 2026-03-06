@@ -1,0 +1,245 @@
+---
+title: 'Multimodal Chat'
+description: 'Intelligent conversational interface supporting text, voice, images, and PDF documents'
+icon: 'messages'
+---
+
+## Overview
+
+The Gima AI Chatbot provides a comprehensive multimodal chat experience that combines text messaging with voice transcription, image analysis, and PDF processing. The chat component orchestrates multiple AI capabilities into a unified conversational interface.
+
+<Info>
+The chat uses **GROQ Llama 3.1 8B** for text conversations, **Gemini Vision** for image analysis, and **Gemini Flash Lite** for voice transcription.
+</Info>
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Text Chat" icon="comment">
+    Real-time AI conversations with persistent message history
+  </Card>
+  <Card title="Voice Input" icon="microphone">
+    Dual-mode voice recognition with Gemini AI and Web Speech API fallback
+  </Card>
+  <Card title="Image Analysis" icon="image">
+    Automatic analysis of uploaded images using Gemini Vision
+  </Card>
+  <Card title="PDF Processing" icon="file-pdf">
+    Extract and analyze content from PDF documents
+  </Card>
+</CardGroup>
+
+## Architecture
+
+The chat system is built with a modular architecture using React hooks for state management:
+
+```typescript
+// Main chat component structure
+export function Chat() {
+  // State management
+  const [input, setInput] = useState('');
+  
+  // Core integrations
+  const {
+    messages,
+    sendMessage,
+    status,
+    reload,
+    clearHistory,
+    setMessages,
+    addToolOutput,
+  } = usePersistentChat();
+  
+  // Voice input with dual-mode support
+  const {
+    isListening,
+    isProcessing,
+    isSupported,
+    mode,
+    transcript,
+    toggleListening,
+    error: voiceError,
+  } = useVoiceInput({ onTranscript: updateTextareaValue });
+  
+  // File submission (Images & PDFs)
+  const { handleSubmit, isAnalyzing, analyzingFileType } = useFileSubmission({
+    setMessages,
+    sendMessage,
+    isListening,
+    toggleListening,
+  });
+  
+  // ...
+}
+```
+
+## Message Flow
+
+<Steps>
+  <Step title="User Input">
+    User enters text, attaches files, or uses voice input through the chat interface
+  </Step>
+  
+  <Step title="Input Processing">
+    The system detects the input type and routes it to the appropriate handler:
+    - Text messages → GROQ API
+    - Images → Gemini Vision analysis
+    - PDFs → Gemini Flash document processing
+    - Voice → Transcription then text processing
+  </Step>
+  
+  <Step title="AI Processing">
+    The appropriate AI model processes the input and generates a response
+  </Step>
+  
+  <Step title="Response Display">
+    Results are added to the message thread with proper formatting and displayed to the user
+  </Step>
+  
+  <Step title="Persistence">
+    Messages are automatically saved to localStorage for conversation continuity
+  </Step>
+</Steps>
+
+## Chat State Management
+
+The chat component uses a computed `canSend` state to control when messages can be submitted:
+
+```typescript
+const canSend =
+  (status === 'ready' ||
+    status === 'error' ||
+    (status !== 'streaming' && status !== 'submitted')) &&
+  !isAnalyzing;
+```
+
+This prevents message submission when:
+- The AI is currently streaming a response
+- A file is being analyzed
+- The system is in an invalid state
+
+## Keyboard Shortcuts
+
+The chat includes productivity-enhancing keyboard shortcuts via the `useChatKeyboard` hook:
+
+<AccordionGroup>
+  <Accordion title="Available Shortcuts">
+    | Shortcut | Action |
+    | --- | --- |
+    | `Cmd/Ctrl + Enter` | Submit message |
+    | `Escape` | Cancel voice recording |
+    | `Cmd/Ctrl + L` | Focus input field |
+  </Accordion>
+</AccordionGroup>
+
+## Quick Actions
+
+Pre-defined prompts provide fast access to common operations:
+
+```typescript
+// Quick action handler
+const handleQuickAction = useCallback(
+  (prompt: string) => {
+    const action = QUICK_ACTIONS.find((a) => a.prompt === prompt);
+    
+    if (action?.formFields && action.formFields.length > 0) {
+      // Action requires data → show inline form
+      setActiveQuickAction(action);
+      return;
+    }
+    
+    // Send prompt directly
+    if (!prompt.endsWith(' ')) {
+      handleSubmit({ text: prompt, files: [] });
+    } else {
+      updateTextareaValue(prompt);
+      textareaRef.current?.focus();
+    }
+  },
+  [handleSubmit, updateTextareaValue]
+);
+```
+
+## Message Storage
+
+Messages are persisted using the `usePersistentChat` hook with localStorage:
+
+<Warning>
+The system maintains a maximum of **100 messages** in localStorage to prevent storage bloat. Older messages are automatically pruned.
+</Warning>
+
+## Error Handling
+
+The chat provides comprehensive error handling with user-friendly messages:
+
+```typescript
+// Voice error display
+<ChatStatusIndicators
+  voiceError={voiceError ?? undefined}
+  isListening={isListening}
+  isProcessing={isProcessing}
+  isAnalyzingImage={isAnalyzing}
+  fileType={analyzingFileType || 'image'}
+  chatError={chatError}
+  mode={mode}
+/>
+```
+
+Errors are categorized by type:
+- **Voice errors**: Microphone permissions, browser support, API issues
+- **Chat errors**: Network failures, API rate limits
+- **File errors**: Size limits, unsupported formats
+
+## Configuration
+
+The chat component can be configured through environment variables:
+
+```bash
+# Required API Keys
+GOOGLE_GENERATIVE_AI_API_KEY=your_gemini_key
+GROQ_API_KEY=your_groq_key
+
+# Optional: Model Selection
+DEFAULT_MODEL=llama-3.1-8b-instant
+```
+
+## Theme Support
+
+The chat automatically adapts to the application's theme (light/dark mode) using Tailwind CSS classes:
+
+```typescript
+<div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
+  {/* Content */}
+</div>
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Message Validation" icon="check">
+    Always validate user input before submission to prevent empty or invalid messages
+  </Card>
+  <Card title="Error Recovery" icon="rotate">
+    Provide clear error messages and allow users to retry failed operations
+  </Card>
+  <Card title="State Management" icon="database">
+    Use computed states to prevent race conditions between different input modes
+  </Card>
+  <Card title="Accessibility" icon="universal-access">
+    Ensure keyboard shortcuts and screen reader support for all interactions
+  </Card>
+</CardGroup>
+
+## Related Features
+
+<CardGroup cols={3}>
+  <Card title="Voice Commands" icon="microphone" href="/features/voice-commands">
+    Learn about voice input capabilities
+  </Card>
+  <Card title="Image Analysis" icon="image" href="/features/image-analysis">
+    Explore image processing features
+  </Card>
+  <Card title="PDF Processing" icon="file-pdf" href="/features/pdf-processing">
+    Discover PDF analysis capabilities
+  </Card>
+</CardGroup>

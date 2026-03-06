@@ -1,0 +1,143 @@
+---
+title: "Activity Summaries"
+description: "Generate professional maintenance activity summaries"
+icon: "file-lines"
+---
+
+Create polished, professional summaries of maintenance activities with AI-powered text generation.
+
+## Overview
+
+The Activity Summary tool transforms raw maintenance data into well-structured reports suitable for:
+- Management presentations
+- Technical documentation
+- Compliance records
+- Customer communications
+
+## Writing Styles
+
+Choose from three distinct writing styles:
+
+<Tabs>
+  <Tab title="Ejecutivo">
+    **Executive Style** - High-level overview for management:
+    - Focus on outcomes and impact
+    - Business-oriented language
+    - Concise and decision-focused
+    - Metrics and KPIs highlighted
+  </Tab>
+  <Tab title="Técnico">
+    **Technical Style** - Detailed for engineering teams:
+    - Specific technical procedures
+    - Equipment specifications
+    - Troubleshooting steps
+    - Root cause analysis
+  </Tab>
+  <Tab title="Narrativo">
+    **Narrative Style** - Story-based for broad audiences:
+    - Chronological flow
+    - Context and background
+    - Easy-to-understand language
+    - Engaging and accessible
+  </Tab>
+</Tabs>
+
+## Detail Levels
+
+Control the depth of information:
+
+- **Bajo** (Low): Brief, one-paragraph summary
+- **Medio** (Medium): Standard report with key sections
+- **Alto** (High): Comprehensive, detailed analysis
+
+## How to Use
+
+<Steps>
+  <Step title="Provide Activity Data">
+    Enter maintenance activity information:
+    - Activity description
+    - Equipment involved
+    - Actions taken
+    - Outcomes and results
+  </Step>
+  <Step title="Select Style and Detail">
+    Choose:
+    - Writing style (Ejecutivo/Técnico/Narrativo)
+    - Detail level (Bajo/Medio/Alto)
+  </Step>
+  <Step title="Generate Summary">
+    AI creates a professional summary with:
+    - Structured sections
+    - Proper formatting
+    - Key highlights
+    - Actionable insights
+  </Step>
+  <Step title="Export and Share">
+    Copy the summary to:
+    - Maintenance management systems
+    - Reports and presentations
+    - Email communications
+  </Step>
+</Steps>
+
+## Example Styles
+
+<Accordion title="Executive Example">
+**Summary Report - HVAC Maintenance**
+
+The preventive maintenance of Unit UMA-03 was successfully completed on schedule. The intervention addressed three critical points: refrigerant level verification, electrical connection inspection, and filter replacement. 
+
+Key outcomes:
+- System efficiency improved by 15%
+- Energy consumption reduced
+- No downtime required
+- Compliance maintained
+
+Recommendation: Continue quarterly maintenance schedule.
+</Accordion>
+
+<Accordion title="Technical Example">
+**Technical Report - UMA-03 Preventive Maintenance**
+
+Equipment: Unidad Manejadora de Aire UMA-03
+Date: 2024-03-06
+Technician: Equipo de Mantenimiento
+
+Procedures Executed:
+1. Refrigerant Level Check
+   - Verified R-410A refrigerant pressure
+   - Low side: 118 PSI (within spec)
+   - High side: 285 PSI (within spec)
+
+2. Electrical System Inspection
+   - Tested all connections
+   - Measured voltage and current
+   - Tightened loose terminals
+
+3. Filter Replacement
+   - Removed MERV 8 filters (heavily loaded)
+   - Installed new MERV 13 filters
+   - Documented filter dimensions
+
+Test Results: System performance within manufacturer specifications.
+</Accordion>
+
+## Technical Implementation
+
+Powered by:
+- **ActivitySummaryAIService** (`app/lib/services/activity-summary-ai-service.ts`)
+- **GROQ LLaMA 3.3 70B** model
+- **Structured output** with Zod validation
+
+See [AI Services API Reference](/api-reference/services/ai-services) for details.
+
+## Related Tools
+
+<CardGroup cols={2}>
+  <Card title="Work Order Closeout" icon="clipboard-check" href="/ai-tools/work-order-closeout">
+    Generate closeout documentation
+  </Card>
+  <Card title="Checklist Builder" icon="list-check" href="/ai-tools/checklist-builder">
+    Create maintenance checklists
+  </Card>
+</CardGroup>

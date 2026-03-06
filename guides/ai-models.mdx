@@ -1,0 +1,347 @@
+---
+title: AI Models
+description: Learn about the AI models used in Gima, their configuration, and how to select the right model for each task
+---
+
+## Overview
+
+Gima AI Chatbot uses a multi-model architecture, leveraging different AI providers for specific tasks:
+
+- **GROQ (Llama)**: Fast text generation, chat, structured data tasks
+- **Google Gemini**: Multimodal tasks (voice, images, PDFs)
+
+All model configurations are centralized in `app/constants/ai.ts` and `app/config/models.ts`.
+
+## Available Models
+
+### Primary Chat Model
+
+The default model for conversational AI is configured in `app/config/models.ts:13-18`:
+
+```typescript
+export const AVAILABLE_MODELS = [
+  {
+    name: 'Llama 3.1 8B',
+    value: 'llama-3.1-8b-instant',
+  },
+] as const;
+
+export const DEFAULT_MODEL = AVAILABLE_MODELS[0].value;
+```
+
+- **Model**: Llama 3.1 8B Instant
+- **Provider**: GROQ
+- **Purpose**: General conversation, equipment queries, maintenance assistance
+- **Speed**: Optimized for low latency
+
+## Model Configuration by Task
+
+Different tasks use different models optimized for their specific requirements.
+
+### Text Generation Tasks (GROQ)
+
+#### Chat Conversation
+
+```typescript
+CHAT: {
+  provider: 'GROQ',
+  model: 'llama-3.3-70b-versatile',
+  temperature: undefined,
+}
+```
+
+- **File**: `app/api/chat/route.ts`
+- **Model**: Llama 3.3 70B Versatile
+- **Use case**: Main chatbot responses, equipment queries, maintenance help
+
+#### Checklist Generation
+
+```typescript
+CHECKLIST_GENERATION: {
+  provider: 'GROQ',
+  model: 'llama-3.3-70b-versatile',
+  temperature: 0.3,
+  maxTokens: 2000,
+}
+```
+
+- **Temperature**: `0.3` (focused, consistent output)
+- **Max tokens**: 2000
+- **Use case**: Generating maintenance checklists for equipment
+- **Source**: `app/constants/ai.ts:58-63`
+
+#### Activity Summary
+
+```typescript
+ACTIVITY_SUMMARY: {
+  provider: 'GROQ',
+  model: 'llama-3.3-70b-versatile',
+  temperature: 0.4,
+  maxTokens: 500,
+}
+```
+
+- **Temperature**: `0.4` (balanced creativity)
+- **Max tokens**: 500
+- **Use case**: Automatic summaries of maintenance activities
+- **Source**: `app/constants/ai.ts:71-76`
+
+#### Work Order Closeout
+
+```typescript
+WORK_ORDER_CLOSEOUT: {
+  provider: 'GROQ',
+  model: 'llama-3.3-70b-versatile',
+  temperature: 0.3,
+  maxTokens: 800,
+}
+```
+
+- **Temperature**: `0.3` (precise documentation)
+- **Max tokens**: 800
+- **Use case**: Generating closeout notes for completed work orders
+- **Source**: `app/constants/ai.ts:97-102`
+
+#### Data Transformation
+
+```typescript
+DATA_TRANSFORMATION: {
+  provider: 'GROQ',
+  model: 'llama-3.3-70b-versatile',
+  temperature: 0.1,
+  maxTokens: 1000,
+}
+```
+
+- **Temperature**: `0.1` (very deterministic)
+- **Max tokens**: 1000
+- **Use case**: Structured data transformations and parsing
+- **Source**: `app/constants/ai.ts:84-89`
+
+### Multimodal Tasks (Gemini)
+
+#### Voice Transcription
+
+```typescript
+VOICE_TRANSCRIPTION: {
+  provider: 'GEMINI',
+  model: 'gemini-2.5-flash-lite',
+  temperature: 0,
+  maxTokens: 500,
+}
+```
+
+- **Model**: Gemini 2.5 Flash Lite (lightweight)
+- **Temperature**: `0` (exact transcription)
+- **File**: `app/actions/voice.ts:50`
+- **Use case**: Converting audio to text
+- **Source**: `app/constants/ai.ts:114-119`
+
+#### Voice Command Parsing
+
+```typescript
+VOICE_COMMAND_PARSING: {
+  provider: 'GEMINI',
+  model: 'gemini-2.5-flash-lite',
+  temperature: 0,
+  maxTokens: 300,
+}
+```
+
+- **Model**: Gemini 2.5 Flash Lite
+- **Temperature**: `0` (deterministic parsing)
+- **File**: `app/actions/voice.ts:148`
+- **Use case**: Parsing voice commands to structured JSON
+- **Source**: `app/constants/ai.ts:127-132`
+
+#### Image Analysis
+
+```typescript
+IMAGE_ANALYSIS: {
+  provider: 'GEMINI',
+  model: 'gemini-2.5-flash',
+  temperature: 0.2,
+  maxTokens: 1000,
+}
+```
+
+- **Model**: Gemini 2.5 Flash (full version for vision)
+- **Temperature**: `0.2` (precise analysis)
+- **File**: `app/actions/vision.ts:50`
+- **Use case**: Analyzing photos of equipment and parts
+- **Source**: `app/constants/ai.ts:140-145`
+
+#### PDF Extraction
+
+```typescript
+PDF_EXTRACTION: {
+  provider: 'GEMINI',
+  model: 'gemini-2.5-flash',
+  temperature: 0.1,
+  maxTokens: 2000,
+}
+```
+
+- **Model**: Gemini 2.5 Flash
+- **Temperature**: `0.1` (accurate extraction)
+- **File**: `app/actions/files.ts:47`
+- **Use case**: Extracting content from technical manuals
+- **Max file size**: 10MB
+- **Source**: `app/constants/ai.ts:153-158`
+
+## Temperature Guide
+
+The `temperature` parameter controls output randomness:
+
+| Temperature | Behavior | Use Cases |
+|-------------|----------|----------|
+| `0` - `0.1` | Very deterministic | Transcription, data parsing, extraction |
+| `0.2` - `0.4` | Focused, consistent | Documentation, summaries, technical writing |
+| `0.5` - `0.7` | Balanced | General chat, creative but accurate |
+| `0.8` - `1.0` | Creative, varied | Not used in Gima (precision preferred) |
+
+## Performance & Timeouts
+
+Different operations have different timeout configurations:
+
+```typescript
+export const AI_TIMEOUTS = {
+  QUICK: 10000,    // 10s - Command parsing
+  NORMAL: 30000,   // 30s - Checklist generation
+  LONG: 60000,     // 60s - Data transformations
+};
+```
+
+**Source**: `app/constants/ai.ts:193-197`
+
+## Retry Configuration
+
+For handling transient errors:
+
+```typescript
+export const AI_RETRY_CONFIG = {
+  MAX_RETRIES: 3,
+  BASE_BACKOFF_MS: 1000,
+  MAX_BACKOFF_MS: 30000,
+};
+```
+
+- **Max retries**: 3 attempts
+- **Backoff strategy**: Exponential (1s, 2s, 4s)
+- **Max backoff**: 30 seconds
+
+**Source**: `app/constants/ai.ts:202-206`
+
+## Streaming Configuration
+
+The chat API uses streaming responses:
+
+```typescript
+export const STREAM_CONFIG = {
+  maxDuration: 30,      // seconds
+  sendSources: false,
+  sendReasoning: false,
+};
+```
+
+- **Max duration**: 30 seconds
+- **Sources**: Not sent (to reduce token usage)
+- **Reasoning**: Not sent (for faster responses)
+
+**Source**: `app/config/server.ts:156-160`
+
+## System Prompts
+
+Gima uses specialized system prompts for different capabilities:
+
+### Main Chat Prompt
+
+The primary system prompt includes:
+
+- University context (UNEG)
+- Technical terminology glossary
+- Tool usage instructions
+- Safety guidelines
+
+**Source**: `app/config/server.ts:40-86`
+
+### Voice Transcription Prompt
+
+- Strict literal transcription rules
+- Technical acronym recognition
+- No filtering or interpretation
+
+**Source**: `app/config/server.ts:94-108`
+
+### Inventory Analysis Prompt
+
+- Structured JSON extraction
+- Technical specification detection
+- Condition assessment
+
+**Source**: `app/config/server.ts:116-149`
+
+## Technical Acronyms
+
+The system recognizes these technical terms:
+
+```typescript
+const ACRONYMS_GLOSSARY = {
+  UNEG: 'Universidad Nacional Experimental de Guayana',
+  UMA: 'Unidad Manejadora de Aire',
+  BCA: 'Bomba Centrífuga de Agua',
+  TAB: 'Tablero de Distribución Eléctrica',
+  ST: 'Subestación Transformadora',
+  AA: 'Aire Acondicionado (Split/Ventana)',
+  GIMA: 'Gestión Integral de Mantenimiento y Activos',
+  OT: 'Orden de Trabajo',
+  MP: 'Mantenimiento Preventivo',
+  MC: 'Mantenimiento Correctivo',
+};
+```
+
+**Source**: `app/config/server.ts:9-20`
+
+## Model Selection Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Lightweight Models" icon="feather">
+    Use `gemini-2.5-flash-lite` for simple tasks like transcription and command parsing.
+  </Card>
+  
+  <Card title="Lower Temperature for Precision" icon="crosshairs">
+    Set temperature to 0-0.3 for documentation, data extraction, and technical writing.
+  </Card>
+  
+  <Card title="Appropriate Token Limits" icon="gauge">
+    Set `maxTokens` based on expected output length to save costs and improve speed.
+  </Card>
+  
+  <Card title="Provider by Task" icon="network-wired">
+    Use GROQ for text, Gemini for multimodal - each excels at different tasks.
+  </Card>
+</CardGroup>
+
+## Customizing Models
+
+To change the model for a specific task:
+
+1. Locate the configuration in `app/constants/ai.ts`
+2. Update the `model`, `temperature`, or `maxTokens`
+3. Test thoroughly before deploying
+
+<Warning>
+Changing models may affect response quality, speed, and costs. Always test in development first.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" href="/guides/configuration" icon="gear">
+    Set up API keys for GROQ and Gemini
+  </Card>
+  
+  <Card title="Backend Integration" href="/guides/backend-integration" icon="plug">
+    Connect to the Laravel backend for real data
+  </Card>
+</CardGroup>

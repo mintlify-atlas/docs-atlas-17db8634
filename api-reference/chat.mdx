@@ -1,0 +1,242 @@
+---
+title: 'POST /api/chat'
+description: 'Send messages to the AI chatbot and receive streaming responses'
+---
+
+## Overview
+
+The chat endpoint processes user messages and returns AI-generated responses using the Groq LLM service. It supports streaming responses, rate limiting, and automatic authentication.
+
+## Endpoint
+
+```
+POST /api/chat
+```
+
+## Request
+
+### Headers
+
+<ParamField header="Content-Type" type="string" required>
+  Must be `application/json`
+</ParamField>
+
+### Body Parameters
+
+<ParamField body="messages" type="array" required>
+  Array of message objects representing the conversation history. Minimum 1 message, maximum 100 messages.
+  
+  Each message object contains:
+  - `role` (string, required): One of `"user"`, `"assistant"`, or `"system"`
+  - `content` (string | object): Message content (max 10KB for strings)
+  - `id` (string, optional): Message identifier
+  - `createdAt` (string | Date, optional): Message timestamp
+</ParamField>
+
+<ParamField body="model" type="string" default="llama-3.1-8b-instant">
+  AI model to use for generating responses. Currently supported:
+  - `llama-3.1-8b-instant` (default)
+</ParamField>
+
+### Message Content Types
+
+The `content` field supports multiple formats:
+
+#### Simple Text
+```json
+{
+  "role": "user",
+  "content": "What is the status of equipment UMA-001?"
+}
+```
+
+#### Multi-part Content
+```json
+{
+  "role": "user",
+  "content": {
+    "parts": [
+      {
+        "type": "text",
+        "text": "Analyze this equipment image"
+      },
+      {
+        "type": "image",
+        "imageUrl": "https://example.com/image.jpg",
+        "mimeType": "image/jpeg"
+      }
+    ]
+  }
+}
+```
+
+#### File Attachments
+```json
+{
+  "role": "user",
+  "content": {
+    "parts": [
+      {
+        "type": "file",
+        "data": "base64-encoded-data",
+        "mediaType": "application/pdf"
+      }
+    ]
+  }
+}
+```
+
+## Response
+
+### Success Response (200 OK)
+
+Returns a streaming response using Server-Sent Events (SSE) format. The stream contains AI-generated text chunks.
+
+<ResponseField name="stream" type="ReadableStream">
+  Server-Sent Events stream containing AI response chunks
+</ResponseField>
+
+### Error Responses
+
+<ResponseField name="400 Bad Request" type="object">
+  Returned when the request format is invalid or validation fails.
+  
+  ```json
+  {
+    "error": "Invalid request format",
+    "details": [
+      {
+        "code": "too_small",
+        "minimum": 1,
+        "path": ["messages"],
+        "message": "Se requiere al menos un mensaje"
+      }
+    ]
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="429 Too Many Requests" type="object">
+  Returned when rate limit is exceeded. See [Rate Limiting](/api-reference/rate-limiting) for details.
+  
+  ```json
+  {
+    "error": "Too Many Requests",
+    "message": "Has excedido el límite de solicitudes. Intenta nuevamente en unos segundos.",
+    "retryAfter": 30
+  }
+  ```
+  
+  **Headers:**
+  - `Retry-After`: Seconds until next request is allowed
+  - `X-RateLimit-Remaining`: `0`
+</ResponseField>
+
+<ResponseField name="500 Internal Server Error" type="object">
+  Returned when an unexpected error occurs during processing.
+  
+  ```json
+  {
+    "error": "Error al procesar la solicitud",
+    "details": "Error message details"
+  }
+  ```
+</ResponseField>
+
+## Examples
+
+### Simple Chat Request
+
+```bash
+curl -X POST https://your-domain.com/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "What maintenance tasks are pending?"
+      }
+    ]
+  }'
+```
+
+### Multi-turn Conversation
+
+```bash
+curl -X POST https://your-domain.com/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "Show me HVAC equipment"
+      },
+      {
+        "role": "assistant",
+        "content": "I found 3 HVAC units..."
+      },
+      {
+        "role": "user",
+        "content": "What is the status of the first one?"
+      }
+    ],
+    "model": "llama-3.1-8b-instant"
+  }'
+```
+
+### With Image Analysis
+
+```bash
+curl -X POST https://your-domain.com/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": {
+          "parts": [
+            {
+              "type": "text",
+              "text": "Identify this equipment part"
+            },
+            {
+              "type": "image",
+              "imageUrl": "https://example.com/part.jpg",
+              "mimeType": "image/jpeg"
+            }
+          ]
+        }
+      }
+    ]
+  }'
+```
+
+## Technical Details
+
+### Message History Limit
+
+The API automatically limits conversation history to the **last 8 messages** to avoid token limit issues with the LLM provider. This is especially important for Groq's `llama-3.1-8b-instant` model which has a 6000 TPM (tokens per minute) limit.
+
+### Authentication
+
+The endpoint automatically attempts silent authentication if no valid session token exists. If authentication fails, the request continues but may encounter network errors when communicating with external AI services.
+
+### Streaming Configuration
+
+- **Max Duration**: 60 seconds (Vercel function timeout)
+- **Stream Sources**: Disabled
+- **Stream Reasoning**: Disabled
+- **Stop Condition**: Maximum 5 AI tool execution steps
+
+### IP Validation
+
+Client IP addresses are validated before processing:
+- **Development**: Localhost connections allowed
+- **Production**: Valid public IP required
+- Invalid IPs receive a 400 Bad Request response
+
+## Related Resources
+
+- [Rate Limiting](/api-reference/rate-limiting) - Learn about request limits and throttling
+- [AI Tools](/ai-tools/overview) - Discover available AI capabilities
+- [Chat Service](/api-reference/services/chat-service) - Chat service implementation details

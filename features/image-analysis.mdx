@@ -1,0 +1,385 @@
+---
+title: 'Image Analysis'
+description: 'AI-powered image recognition for industrial parts and equipment using Gemini Vision'
+icon: 'image'
+---
+
+## Overview
+
+The Image Analysis feature uses **Google Gemini Vision** to automatically identify, classify, and assess industrial parts and equipment from uploaded images. The system provides structured analysis including item type, condition, quantity, and maintenance recommendations.
+
+<Info>
+Image analysis uses **Gemini 2.5 Flash** with structured output generation to ensure consistent, parseable results.
+</Info>
+
+## Capabilities
+
+<CardGroup cols={2}>
+  <Card title="Part Identification" icon="magnifying-glass">
+    Automatically detect and classify equipment types (mobiliario, equipo)
+  </Card>
+  <Card title="Condition Assessment" icon="clipboard-check">
+    Evaluate physical condition (nuevo, usado, dañado, requiere_inspeccion)
+  </Card>
+  <Card title="Quantity Detection" icon="hashtag">
+    Count multiple items of the same type in a single image
+  </Card>
+  <Card title="Metadata Extraction" icon="tags">
+    Identify brand, model, and visible identification codes
+  </Card>
+</CardGroup>
+
+## Analysis Schema
+
+The vision API returns structured data validated with Zod:
+
+```typescript
+const partAnalysisSchema = z.object({
+  tipo_articulo: z.enum(['mobiliario', 'equipo'])
+    .describe('Clasificación general del artículo'),
+  codigo: z.string().optional()
+    .describe('Código identificado visible en la pieza'),
+  descripcion: z.string()
+    .describe('Descripción detallada de la pieza o equipo'),
+  marca: z.string().optional()
+    .describe('Marca del fabricante si es visible'),
+  modelo: z.string().optional()
+    .describe('Modelo del equipo si es visible'),
+  cantidad_detectada: z.number()
+    .describe('Cantidad de piezas de este tipo detectadas en la foto'),
+  estado_fisico: z.enum(['nuevo', 'usado', 'dañado', 'requiere_inspeccion'])
+    .describe('Condición visual de la pieza'),
+  recomendacion: z.string()
+    .describe('Recomendación breve sobre el manejo o mantenimiento'),
+  nivel_confianza: z.enum(['alta', 'media', 'baja'])
+    .describe('Confianza de la IA sobre su identificación'),
+});
+
+type PartAnalysisResult = z.infer<typeof partAnalysisSchema>;
+```
+
+## Server Action
+
+The image analysis is performed via a server action:
+
+```typescript
+export async function analyzePartImage(
+  formData: FormData
+): Promise<{ result: PartAnalysisResult | null; success: boolean; error?: string }> {
+  const file = formData.get('file') as File | null;
+  let customPrompt = formData.get('prompt') as string | null;
+  
+  if (!file) throw new Error('Imagen vacía');
+  
+  // Validate file size
+  const sizeInBytes = file.size;
+  const sizeInMB = bytesToMB(sizeInBytes);
+  
+  if (sizeInMB > MAX_IMAGE_SIZE_MB) {
+    throw new Error(
+      `Imagen demasiado grande (${sizeInMB.toFixed(1)}MB). Máximo: ${MAX_IMAGE_SIZE_MB}MB`
+    );
+  }
+  
+  const buffer = await file.arrayBuffer();
+  const base64Content = Buffer.from(buffer).toString('base64');
+  
+  // Call Gemini Vision with structured output
+  const result = await generateObject({
+    model: google('gemini-2.5-flash'),
+    temperature: 0.1, // Low temperature for schema adherence
+    schema: partAnalysisSchema,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: customPrompt || INVENTORY_PROMPT },
+          { type: 'image', image: base64Content },
+        ],
+      },
+    ],
+  });
+  
+  return { result: result.object, success: true };
+}
+```
+
+## Integration with Chat
+
+Images are automatically analyzed when uploaded to the chat interface:
+
+<Steps>
+  <Step title="Image Upload">
+    User attaches an image file through the chat input or drag-and-drop
+  </Step>
+  
+  <Step title="Size Validation">
+    System checks if image is under the 5MB limit
+    
+    ```typescript
+    const limitBytes = MAX_IMAGE_SIZE_BYTES;
+    if (fileSize > limitBytes) {
+      throw new Error(`El archivo excede el límite de ${bytesToMB(limitBytes)}MB`);
+    }
+    ```
+  </Step>
+  
+  <Step title="Base64 Conversion">
+    Image is converted from Blob URL to base64 for API transmission
+    
+    ```typescript
+    const response = await fetch(imageFile.url);
+    const blob = await response.blob();
+    
+    const base64Promise = new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+    ```
+  </Step>
+  
+  <Step title="User Message Creation">
+    User message with image attachment is added to chat
+    
+    ```typescript
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `user-${Date.now()}`,
+        role: 'user',
+        content: userText,
+        parts: [
+          { type: 'text', text: userText },
+          { type: 'image', imageUrl: fileDataUrl, mimeType: file.mediaType },
+        ],
+        createdAt: new Date(),
+      },
+    ]);
+    ```
+  </Step>
+  
+  <Step title="Vision Analysis">
+    Server action processes the image with Gemini Vision
+  </Step>
+  
+  <Step title="Result Display">
+    Structured analysis is formatted and added as assistant message
+  </Step>
+</Steps>
+
+## Result Formatting
+
+Analysis results are presented in a user-friendly markdown format:
+
+```typescript
+const formattedText = `📱 **Análisis Visual (IA)**
+
+| Atributo | Detalle |
+| :--- | :--- |
+| **Tipo** | ${analysisObj.tipo_articulo} |
+| **Estado** | ${analysisObj.estado_fisico.replace('_', ' ')} |
+| **Confianza** | ${analysisObj.nivel_confianza} |
+| **Marca** | ${analysisObj.marca || 'N/A'} |
+| **Modelo** | ${analysisObj.modelo || 'N/A'} |
+| **Cantidad** | ${analysisObj.cantidad_detectada} |
+
+**Descripción detallada:**
+> ${analysisObj.descripcion}
+
+💡 **Recomendación:**  
+*${analysisObj.recomendacion}*
+
+---
+*Generado automáticamente por IA a partir de la imagen.*`;
+```
+
+### Example Output
+
+<Frame>
+  <div style={{padding: '1rem', background: '#f5f5f5', borderRadius: '0.5rem'}}>
+    <strong>📱 Análisis Visual (IA)</strong>
+    <table style={{marginTop: '1rem', width: '100%'}}>
+      <tr><td><strong>Tipo</strong></td><td>equipo</td></tr>
+      <tr><td><strong>Estado</strong></td><td>usado</td></tr>
+      <tr><td><strong>Confianza</strong></td><td>alta</td></tr>
+      <tr><td><strong>Marca</strong></td><td>Bosch</td></tr>
+      <tr><td><strong>Modelo</strong></td><td>GBH 2-28</td></tr>
+      <tr><td><strong>Cantidad</strong></td><td>1</td></tr>
+    </table>
+    <p style={{marginTop: '1rem'}}><strong>Descripción detallada:</strong></p>
+    <blockquote>Martillo perforador eléctrico profesional con sistema SDS-plus</blockquote>
+    <p><strong>💡 Recomendación:</strong></p>
+    <p><em>Verificar desgaste de brocas y lubricar mecanismo de percusión</em></p>
+  </div>
+</Frame>
+
+## Using the Image Analysis Hook
+
+The `useImageAnalysis` hook provides a clean interface for image processing:
+
+```typescript
+import { useImageAnalysis } from '@/app/components/features/chat/hooks/use-image-analysis';
+
+function ImageUploadComponent() {
+  const [messages, setMessages] = useState([]);
+  const toast = useToast();
+  
+  const { analyzeImage } = useImageAnalysis({ setMessages, toast });
+  
+  const handleImageUpload = async (file: File) => {
+    const imageFile = {
+      url: URL.createObjectURL(file),
+      mediaType: file.type,
+      name: file.name,
+    };
+    
+    const success = await analyzeImage(imageFile);
+    
+    if (success) {
+      console.log('Analysis added to chat');
+    }
+  };
+  
+  return (
+    <input 
+      type="file" 
+      accept="image/*" 
+      onChange={(e) => handleImageUpload(e.target.files[0])}
+    />
+  );
+}
+```
+
+## File Size Limits
+
+```typescript
+// From app/config/limits.ts
+export const MAX_IMAGE_SIZE_MB = 5;
+export const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
+
+// Helper function
+export function bytesToMB(bytes: number): number {
+  return Math.round((bytes / (1024 * 1024)) * 10) / 10;
+}
+```
+
+<Warning>
+Images larger than **5MB** will be rejected. Consider implementing client-side image compression for large files.
+</Warning>
+
+## Custom Prompts
+
+You can provide custom analysis prompts for specific use cases:
+
+```typescript
+const formData = new FormData();
+formData.append('file', imageBlob, 'equipment.jpg');
+formData.append('prompt', 'Focus on safety hazards and compliance issues');
+
+const result = await analyzePartImage(formData);
+```
+
+## Error Handling
+
+The system provides detailed error feedback:
+
+```typescript
+if (result.success && result.result) {
+  // Process successful analysis
+  displayAnalysis(result.result);
+} else {
+  // Handle error
+  const errorMsg = `❌ Error al analizar imagen: ${result.error || 'Error desconocido'}`;
+  
+  setMessages((prev) => [
+    ...prev,
+    {
+      id: `vision-error-${Date.now()}`,
+      role: 'assistant',
+      content: errorMsg,
+      parts: [],
+      createdAt: new Date(),
+    },
+  ]);
+  
+  toast.error('Error de visión', result.error);
+}
+```
+
+## Supported Image Formats
+
+The system accepts all standard image formats supported by browsers:
+
+<AccordionGroup>
+  <Accordion title="Supported Formats">
+    - **JPEG** (.jpg, .jpeg)
+    - **PNG** (.png)
+    - **WebP** (.webp)
+    - **GIF** (.gif)
+    - **BMP** (.bmp)
+    - **SVG** (.svg)
+  </Accordion>
+</AccordionGroup>
+
+## Performance Optimization
+
+<CardGroup cols={2}>
+  <Card title="Low Temperature" icon="thermometer">
+    Uses `temperature: 0.1` for consistent, schema-compliant responses
+  </Card>
+  <Card title="Efficient Model" icon="bolt">
+    Gemini 2.5 Flash provides fast responses at low cost
+  </Card>
+  <Card title="Size Validation" icon="ruler">
+    Client-side validation prevents oversized uploads
+  </Card>
+  <Card title="Structured Output" icon="diagram-project">
+    Using `generateObject` ensures valid, parseable results
+  </Card>
+</CardGroup>
+
+## Best Practices
+
+<Steps>
+  <Step title="Image Quality">
+    Upload clear, well-lit images for best analysis results
+  </Step>
+  
+  <Step title="Single Item Focus">
+    For detailed analysis, photograph items individually when possible
+  </Step>
+  
+  <Step title="Visible Details">
+    Ensure brand names, model numbers, and condition indicators are visible
+  </Step>
+  
+  <Step title="Error Handling">
+    Always handle analysis failures gracefully with user feedback
+  </Step>
+</Steps>
+
+## Configuration
+
+```bash
+# .env.local
+GOOGLE_GENERATIVE_AI_API_KEY=your_api_key_here
+
+# Optional: Custom inventory prompt
+INVENTORY_PROMPT="Analyze this industrial equipment..."
+```
+
+## Related Features
+
+<CardGroup cols={3}>
+  <Card title="Multimodal Chat" icon="messages" href="/features/multimodal-chat">
+    Full chat interface with all modalities
+  </Card>
+  <Card title="Voice Commands" icon="microphone" href="/features/voice-commands">
+    Voice transcription and command parsing
+  </Card>
+  <Card title="PDF Processing" icon="file-pdf" href="/features/pdf-processing">
+    Document analysis capabilities
+  </Card>
+</CardGroup>

@@ -1,0 +1,574 @@
+---
+title: Testing
+description: Complete guide to testing the Gima AI Chatbot with Vitest, Testing Library, and MSW
+---
+
+## Overview
+
+Gima uses a modern testing stack:
+
+- **Test Runner**: [Vitest](https://vitest.dev/) - Fast, ESM-native, Vite-powered
+- **React Testing**: [@testing-library/react](https://testing-library.com/react)
+- **API Mocking**: [MSW](https://mswjs.io/) (Mock Service Worker)
+- **Coverage**: Vitest Coverage (v8 provider)
+
+## Quick Start
+
+### Running Tests
+
+```bash
+# Run all tests
+npm test
+
+# Run tests in watch mode
+npm test -- --watch
+
+# Run tests with UI
+npm run test:ui
+
+# Generate coverage report
+npm run test:coverage
+```
+
+**Source**: `package.json:14-16`
+
+### Test Configuration
+
+Vitest is configured in `vitest.config.ts:1-29`:
+
+```typescript
+export default defineConfig({
+  plugins: [react()],
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: './tests/config/vitest.setup.ts',
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+      exclude: [
+        'node_modules/',
+        'test/',
+        '*.config.*',
+        '.next/',
+        'app/layout.tsx',
+        'app/globals.css',
+      ],
+    },
+  },
+  resolve: {
+    alias: { '@': path.resolve(__dirname, '.') }
+  },
+});
+```
+
+## Test Setup
+
+### Global Setup File
+
+**Location**: `tests/config/vitest.setup.ts`
+
+The setup file configures:
+
+1. **Testing Library matchers**
+   ```typescript
+   import '@testing-library/jest-dom';
+   ```
+
+2. **Fake timers** (for strict timing control)
+   ```typescript
+   vi.useFakeTimers();
+   ```
+
+3. **Global mocks**:
+   - `crypto.randomUUID` → predictable UUIDs
+   - `navigator.mediaDevices` → for voice tests
+   - `localStorage` → for persistence tests
+   - `window.matchMedia` → for theme tests
+
+4. **Lifecycle hooks**:
+   ```typescript
+   beforeEach(() => vi.clearAllMocks());
+   afterEach(() => {
+     cleanup();
+     vi.clearAllTimers();
+   });
+   ```
+
+**Source**: `tests/config/vitest.setup.ts:1-64`
+
+## Writing Tests
+
+### Unit Tests
+
+#### Testing Configuration Validation
+
+**Example**: `app/config/__tests__/env.test.ts`
+
+```typescript
+import { describe, it, expect } from 'vitest';
+import { z } from 'zod';
+
+describe('Environment Validation', () => {
+  const envSchema = z.object({
+    GROQ_API_KEY: z
+      .string()
+      .min(1)
+      .startsWith('gsk_'),
+  });
+
+  it('should accept valid GROQ API key', () => {
+    const result = envSchema.safeParse({
+      GROQ_API_KEY: 'gsk_1234567890abcdef',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('should reject invalid prefix', () => {
+    const result = envSchema.safeParse({
+      GROQ_API_KEY: 'invalid_key',
+    });
+    expect(result.success).toBe(false);
+  });
+});
+```
+
+**Source**: `app/config/__tests__/env.test.ts:1-141`
+
+### Integration Tests
+
+#### Testing API Routes
+
+**Example**: `app/api/chat/__tests__/route.test.ts`
+
+```typescript
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { POST } from '../route';
+import { ChatService, ValidationError } from '@/app/lib/services/chat-service';
+
+// Mock dependencies
+vi.mock('@/app/lib/services/chat-service');
+
+const createRequest = (body: unknown) => {
+  return new Request('http://localhost/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+};
+
+describe('POST /api/chat', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should return 400 for invalid JSON', async () => {
+    const req = new Request('http://localhost/api/chat', {
+      method: 'POST',
+      body: 'invalid-json',
+    });
+    const response = await POST(req);
+    expect(response.status).toBe(400);
+  });
+
+  it('should return 429 for rate limit', async () => {
+    const mockProcessMessage = vi.fn()
+      .mockRejectedValue(new RateLimitError(60));
+    
+    ChatService.mockImplementation(() => ({
+      processMessage: mockProcessMessage
+    }));
+
+    const req = createRequest({ messages: [] });
+    const response = await POST(req);
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get('Retry-After')).toBe('60');
+  });
+});
+```
+
+**Source**: `app/api/chat/__tests__/route.test.ts:1-107`
+
+### Component Tests
+
+#### Testing React Hooks
+
+**Example**: Testing a custom hook
+
+```typescript
+import { renderHook, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { useVoiceInput } from '../use-voice-input';
+
+describe('useVoiceInput', () => {
+  it('should start recording', async () => {
+    const mockGetUserMedia = vi.fn().mockResolvedValue({
+      getTracks: () => [{ stop: vi.fn() }]
+    });
+    
+    navigator.mediaDevices.getUserMedia = mockGetUserMedia;
+
+    const { result } = renderHook(() => useVoiceInput());
+
+    await result.current.startRecording();
+
+    expect(result.current.isRecording).toBe(true);
+    expect(mockGetUserMedia).toHaveBeenCalledWith({ audio: true });
+  });
+
+  it('should handle permission denied', async () => {
+    navigator.mediaDevices.getUserMedia = vi.fn()
+      .mockRejectedValue(new Error('Permission denied'));
+
+    const { result } = renderHook(() => useVoiceInput());
+
+    await expect(result.current.startRecording())
+      .rejects.toThrow('Permission denied');
+  });
+});
+```
+
+#### Testing React Components
+
+```typescript
+import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { VoiceButton } from '../voice-button';
+
+describe('VoiceButton', () => {
+  it('renders in idle state', () => {
+    render(<VoiceButton onStart={vi.fn()} />);
+    expect(screen.getByRole('button')).toBeInTheDocument();
+    expect(screen.getByLabelText('Start recording')).toBeInTheDocument();
+  });
+
+  it('calls onStart when clicked', () => {
+    const onStart = vi.fn();
+    render(<VoiceButton onStart={onStart} />);
+    
+    fireEvent.click(screen.getByRole('button'));
+    
+    expect(onStart).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows recording state', () => {
+    render(<VoiceButton onStart={vi.fn()} isRecording />);
+    expect(screen.getByLabelText('Stop recording')).toBeInTheDocument();
+  });
+});
+```
+
+## Mocking
+
+### Mocking Services
+
+```typescript
+import { vi } from 'vitest';
+import type { BackendAPIService } from '@/app/lib/services/backend-api-service';
+
+const mockBackendService: Partial<BackendAPIService> = {
+  getActivos: vi.fn().mockResolvedValue({
+    items: [{ id: 1, nombre: 'Test Asset' }],
+    pagination: { page: 1, total: 1, hasMore: false }
+  }),
+  getMantenimientos: vi.fn().mockResolvedValue({
+    items: [],
+    pagination: { page: 1, total: 0, hasMore: false }
+  })
+};
+```
+
+### Mocking API Routes with MSW
+
+**Setup**: `tests/setup.msw.ts`
+
+```typescript
+import { setupServer } from 'msw/node';
+import { http, HttpResponse } from 'msw';
+import { beforeAll, afterAll, afterEach } from 'vitest';
+
+const handlers = [
+  http.get('/api/catalogo/activos', () => {
+    return HttpResponse.json({
+      data: [{ id: 1, nombre: 'Test Asset' }],
+      meta: { current_page: 1, total: 1 }
+    });
+  }),
+];
+
+const server = setupServer(...handlers);
+
+beforeAll(() => server.listen());
+afterEach(() => server.resetHandlers());
+afterAll(() => server.close());
+```
+
+### Mocking Environment Variables
+
+```typescript
+import { vi } from 'vitest';
+
+vi.mock('@/app/config/env', () => ({
+  env: {
+    GROQ_API_KEY: 'gsk_test_key',
+    GOOGLE_GENERATIVE_AI_API_KEY: 'AIzaTest',
+    NODE_ENV: 'test',
+    NEXT_PUBLIC_BACKEND_API_URL: 'http://test.api',
+  }
+}));
+```
+
+## Performance Tests
+
+### Testing Chat Performance
+
+**Example**: `tests/performance/chat-performance.test.ts`
+
+```typescript
+import { describe, it, expect } from 'vitest';
+
+describe('Chat Performance', () => {
+  it('should handle 100 messages without memory leak', () => {
+    const messages = [];
+    const startMemory = performance.memory?.usedJSHeapSize || 0;
+
+    for (let i = 0; i < 100; i++) {
+      messages.push({ id: i, content: `Message ${i}` });
+    }
+
+    const endMemory = performance.memory?.usedJSHeapSize || 0;
+    const memoryIncrease = endMemory - startMemory;
+
+    // Memory should not increase by more than 5MB
+    expect(memoryIncrease).toBeLessThan(5 * 1024 * 1024);
+  });
+
+  it('should render messages in under 100ms', () => {
+    const start = performance.now();
+    
+    // Render 50 messages
+    render(<MessageList messages={generate50Messages()} />);
+    
+    const duration = performance.now() - start;
+    expect(duration).toBeLessThan(100);
+  });
+});
+```
+
+## Coverage
+
+### Viewing Coverage Reports
+
+```bash
+npm run test:coverage
+```
+
+This generates:
+- **Text output**: In terminal
+- **HTML report**: `coverage/index.html`
+- **JSON data**: `coverage/coverage-final.json`
+
+### Coverage Exclusions
+
+The following are excluded from coverage (see `vitest.config.ts:14-21`):
+
+- `node_modules/`
+- `test/` directories
+- Config files (`*.config.*`)
+- `.next/` build output
+- `app/layout.tsx` (Next.js boilerplate)
+- `app/globals.css`
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Test Behavior, Not Implementation" icon="eye">
+    Focus on what components do, not how they do it. Test user-facing behavior.
+  </Card>
+  
+  <Card title="Use Fake Timers" icon="clock">
+    Control time in tests with `vi.useFakeTimers()` for predictable async tests.
+  </Card>
+  
+  <Card title="Mock External Dependencies" icon="plug-circle-xmark">
+    Mock API calls, file system, and external services to keep tests fast and isolated.
+  </Card>
+  
+  <Card title="Clean Up After Tests" icon="broom">
+    Use `afterEach` to reset mocks, timers, and DOM to prevent test pollution.
+  </Card>
+</CardGroup>
+
+## Testing Patterns
+
+### Arrange-Act-Assert (AAA)
+
+```typescript
+it('should update user name', async () => {
+  // Arrange
+  const mockUser = { id: 1, name: 'Old Name' };
+  const { result } = renderHook(() => useUser(mockUser));
+  
+  // Act
+  await result.current.updateName('New Name');
+  
+  // Assert
+  expect(result.current.user.name).toBe('New Name');
+});
+```
+
+### Given-When-Then (BDD)
+
+```typescript
+describe('Voice Command Feature', () => {
+  it('should create work order from voice command', async () => {
+    // Given a user with voice permissions
+    const user = createMockUser({ canUseVoice: true });
+    
+    // When they speak a work order command
+    const command = "Create work order for pump repair";
+    const result = await parseVoiceCommand(command);
+    
+    // Then a work order should be created
+    expect(result.type).toBe('work_order');
+    expect(result.data.description).toContain('pump repair');
+  });
+});
+```
+
+## Debugging Tests
+
+### Running Single Test
+
+```bash
+# Run specific test file
+npm test app/config/__tests__/env.test.ts
+
+# Run tests matching pattern
+npm test -- --grep "validation"
+```
+
+### Using Debug Output
+
+```typescript
+import { screen, render } from '@testing-library/react';
+
+it('debug example', () => {
+  render(<MyComponent />);
+  
+  // Print entire DOM
+  screen.debug();
+  
+  // Print specific element
+  screen.debug(screen.getByRole('button'));
+});
+```
+
+### Inspecting Failed Tests
+
+```bash
+# Run tests in UI mode for visual debugging
+npm run test:ui
+```
+
+The UI shows:
+- Test execution flow
+- Console logs
+- Error stack traces
+- Component renders
+
+## Continuous Integration
+
+Example GitHub Actions workflow:
+
+```yaml
+name: Tests
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: npm run type-check
+      - run: npm run lint
+      - run: npm run test:coverage
+      - uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage/coverage-final.json
+```
+
+## Common Testing Scenarios
+
+### Testing Async Operations
+
+```typescript
+import { waitFor } from '@testing-library/react';
+
+it('should load data', async () => {
+  const { result } = renderHook(() => useData());
+
+  await waitFor(() => {
+    expect(result.current.isLoading).toBe(false);
+  });
+
+  expect(result.current.data).toBeDefined();
+});
+```
+
+### Testing Error Boundaries
+
+```typescript
+it('should catch errors', () => {
+  const consoleError = vi.spyOn(console, 'error')
+    .mockImplementation(() => {});
+
+  render(
+    <ErrorBoundary fallback={<div>Error occurred</div>}>
+      <ComponentThatThrows />
+    </ErrorBoundary>
+  );
+
+  expect(screen.getByText('Error occurred')).toBeInTheDocument();
+  consoleError.mockRestore();
+});
+```
+
+### Testing Forms
+
+```typescript
+import { screen, render, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+
+it('should submit form', async () => {
+  const onSubmit = vi.fn();
+  render(<LoginForm onSubmit={onSubmit} />);
+
+  await userEvent.type(screen.getByLabelText('Email'), 'test@example.com');
+  await userEvent.type(screen.getByLabelText('Password'), 'password123');
+  await userEvent.click(screen.getByRole('button', { name: 'Login' }));
+
+  expect(onSubmit).toHaveBeenCalledWith({
+    email: 'test@example.com',
+    password: 'password123'
+  });
+});
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" href="/guides/configuration" icon="gear">
+    Learn how to configure test environment variables
+  </Card>
+  
+  <Card title="Backend Integration" href="/guides/backend-integration" icon="plug">
+    Test backend API integration with mocks
+  </Card>
+</CardGroup>

@@ -1,0 +1,804 @@
+---
+title: 'Schemas'
+description: 'Zod validation schemas for AI tools, chat API, and backend responses'
+icon: 'shield-check'
+---
+
+## Overview
+
+The schemas module provides comprehensive Zod validation for:
+- **Checklist generation** - Request/response validation for AI-generated checklists
+- **Activity summaries** - Validation for AI-powered activity reports
+- **Backend responses** - Laravel API response schemas with pagination
+- **Chat API** - Message and request validation
+
+All schemas are defined using [Zod](https://zod.dev/) for runtime type safety.
+
+## Checklist Schemas
+
+Location: `app/lib/schemas/checklist.schema.ts`
+
+### checklistGenerationRequestSchema
+
+Validates requests for AI checklist generation.
+
+```typescript
+const checklistGenerationRequestSchema = z.object({
+  assetType: z.enum(ASSET_TYPES),
+  taskType: z.enum(TASK_TYPES),
+  customInstructions: z.string().max(500).optional(),
+  context: z.string().max(200).optional(),
+});
+```
+
+#### Fields
+
+<ParamField path="assetType" type="enum" required>
+  Asset type from `ASSET_TYPES` constant:
+  
+  `unidad-hvac`, `caldera`, `bomba`, `compresor`, `generador`, `panel-electrico`, `transportador`, `grua`, `montacargas`, `otro`
+</ParamField>
+
+<ParamField path="taskType" type="enum" required>
+  Task type from `TASK_TYPES` constant:
+  
+  `preventivo`, `correctivo`, `predictivo`
+</ParamField>
+
+<ParamField path="customInstructions" type="string" optional>
+  Custom instructions for checklist generation (max 500 characters)
+</ParamField>
+
+<ParamField path="context" type="string" optional>
+  Additional context (max 200 characters)
+</ParamField>
+
+#### Type Export
+
+```typescript
+type ChecklistGenerationRequest = z.infer<typeof checklistGenerationRequestSchema>;
+```
+
+### checklistItemSchema
+
+Validates individual checklist items.
+
+```typescript
+const checklistItemSchema = z.object({
+  id: z.string().uuid(),
+  description: z.string().min(5).max(150),
+  category: z.enum(CHECKLIST_CATEGORIES),
+  order: z.number().int().nonnegative(),
+  required: z.boolean(),
+  notes: z.string().max(300).optional(),
+});
+```
+
+#### Fields
+
+<ParamField path="id" type="string" required>
+  UUID identifier
+</ParamField>
+
+<ParamField path="description" type="string" required>
+  Item description (5-150 characters)
+</ParamField>
+
+<ParamField path="category" type="enum" required>
+  Category from `CHECKLIST_CATEGORIES` constant
+</ParamField>
+
+<ParamField path="order" type="number" required>
+  Display order (non-negative integer)
+</ParamField>
+
+<ParamField path="required" type="boolean" required>
+  Whether the item is required
+</ParamField>
+
+<ParamField path="notes" type="string" optional>
+  Additional notes (max 300 characters)
+</ParamField>
+
+### checklistSchema
+
+Validates complete checklist objects.
+
+```typescript
+const checklistSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string().min(5).max(100),
+  description: z.string().min(10).max(500),
+  assetType: z.enum(ASSET_TYPES),
+  taskType: z.enum(TASK_TYPES),
+  items: z.array(checklistItemSchema).min(3).max(50),
+  createdAt: z.coerce.date(),
+  isTemplate: z.boolean(),
+  metadata: z.object({
+    generatedBy: z.enum(['ai', 'manual']).optional(),
+    version: z.string().optional(),
+    tags: z.array(z.string()).optional(),
+  }).optional(),
+});
+```
+
+#### Constraints
+
+- **Title:** 5-100 characters
+- **Description:** 10-500 characters
+- **Items:** 3-50 items (from `CHECKLIST_LIMITS` constant)
+- **CreatedAt:** Coerced to Date object
+
+#### Type Export
+
+```typescript
+type Checklist = z.infer<typeof checklistSchema>;
+type ChecklistItem = z.infer<typeof checklistItemSchema>;
+```
+
+### aiChecklistResponseSchema
+
+Validates raw AI model responses before processing.
+
+```typescript
+const aiChecklistResponseSchema = z.object({
+  title: z.string(),
+  description: z.string(),
+  items: z.array(
+    z.object({
+      description: z.string(),
+      category: z.string(),
+      required: z.boolean(),
+      notes: z.string().optional(),
+    })
+  ),
+});
+```
+
+## Activity Summary Schemas
+
+Location: `app/lib/schemas/activity-summary.schema.ts`
+
+### activitySummaryRequestSchema
+
+Validates requests for AI activity summary generation.
+
+```typescript
+const activitySummaryRequestSchema = z.object({
+  assetType: z.enum(ASSET_TYPES),
+  taskType: z.enum(TASK_TYPES),
+  activities: z.string().min(10).max(5000),
+  style: z.enum(['ejecutivo', 'tecnico', 'narrativo']),
+  detailLevel: z.enum(['alto', 'medio', 'bajo']),
+  context: z.string().max(500).optional(),
+});
+```
+
+#### Fields
+
+<ParamField path="activities" type="string" required>
+  Activity notes to summarize (10-5000 characters)
+</ParamField>
+
+<ParamField path="style" type="enum" required>
+  Summary style:
+  - `ejecutivo` - Executive summary
+  - `tecnico` - Technical report
+  - `narrativo` - Narrative format
+</ParamField>
+
+<ParamField path="detailLevel" type="enum" required>
+  Detail level:
+  - `alto` - High detail
+  - `medio` - Medium detail
+  - `bajo` - Low detail
+</ParamField>
+
+<ParamField path="context" type="string" optional>
+  Additional context (max 500 characters)
+</ParamField>
+
+#### Type Export
+
+```typescript
+type ActivitySummaryRequest = z.infer<typeof activitySummaryRequestSchema>;
+```
+
+### summarySectionSchema
+
+Validates individual summary sections.
+
+```typescript
+const summarySectionSchema = z.object({
+  title: z.string().min(1).max(100),
+  content: z.string().min(1),
+  order: z.number().int().min(0),
+});
+```
+
+### activitySummarySchema
+
+Validates complete activity summary objects.
+
+```typescript
+const activitySummarySchema = z.object({
+  id: z.string().uuid(),
+  title: z.string().min(1).max(150),
+  executive: z.string().min(50).max(1000),
+  sections: z.array(summarySectionSchema).min(1).max(10),
+  assetType: z.enum(ASSET_TYPES),
+  taskType: z.enum(TASK_TYPES),
+  style: z.enum(['ejecutivo', 'tecnico', 'narrativo']),
+  detailLevel: z.enum(['alto', 'medio', 'bajo']),
+  createdAt: z.date(),
+  metadata: z.object({
+    wordCount: z.number().int().positive().optional(),
+    readingTime: z.number().int().positive().optional(),
+    generatedBy: z.enum(['ai', 'manual']).optional(),
+    version: z.string().optional(),
+  }).optional(),
+});
+```
+
+#### Constraints
+
+- **Title:** 1-150 characters
+- **Executive:** 50-1000 characters (executive summary)
+- **Sections:** 1-10 sections
+- **Metadata:** Optional word count and reading time
+
+#### Type Export
+
+```typescript
+type ActivitySummary = z.infer<typeof activitySummarySchema>;
+type SummarySection = z.infer<typeof summarySectionSchema>;
+```
+
+### aiSummaryResponseSchema
+
+Validates raw AI model responses.
+
+```typescript
+const aiSummaryResponseSchema = z.object({
+  title: z.string().min(1).max(150),
+  executive: z.string().min(50).max(1000),
+  sections: z.array(
+    z.object({
+      title: z.string().min(1).max(100),
+      content: z.string().min(1),
+      order: z.number().int().min(0),
+    })
+  ).min(1).max(10),
+});
+```
+
+## Backend Response Schemas
+
+Location: `app/lib/schemas/backend-response.schema.ts`
+
+Validates Laravel API responses including pagination.
+
+### laravelPaginatedSchema()
+
+Creates a Zod schema for paginated Laravel responses.
+
+```typescript
+function laravelPaginatedSchema<T extends z.ZodType>(
+  itemSchema: T
+): ZodSchema
+```
+
+#### Parameters
+
+<ParamField path="itemSchema" type="ZodType" required>
+  Zod schema for individual items
+</ParamField>
+
+#### Returns
+
+Schema that accepts three Laravel pagination formats:
+
+1. **API Resource Collection**
+   ```json
+   {
+     "data": [...],
+     "links": {"first": "...", "last": "..."},
+     "meta": {"current_page": 1, "total": 100}
+   }
+   ```
+
+2. **Simple Paginator**
+   ```json
+   {
+     "data": [...],
+     "current_page": 1,
+     "last_page": 10,
+     "per_page": 15,
+     "total": 100
+   }
+   ```
+
+3. **Internal Wrapper**
+   ```json
+   {
+     "items": [...],
+     "pagination": {"page": 1, "total": 100}
+   }
+   ```
+
+#### Type Exports
+
+```typescript
+type LaravelPaginated<T> = {
+  current_page: number;
+  data: T[];
+  last_page: number;
+  per_page: number;
+  total: number;
+  next_page_url: string | null;
+  prev_page_url: string | null;
+};
+
+interface PaginatedResult<T> {
+  items: T[];
+  pagination: {
+    page: number;
+    lastPage: number;
+    perPage: number;
+    total: number;
+    hasMore: boolean;
+  };
+}
+```
+
+### Entity Schemas
+
+#### direccionSchema
+
+Location/address entity.
+
+```typescript
+const direccionSchema = z.object({
+  id: z.number(),
+  estado: z.string().nullable().optional(),
+  ciudad: z.string().nullable().optional(),
+  sector: z.string().nullable().optional(),
+  calle: z.string().nullable().optional(),
+  sede: z.string().nullable().optional(),
+});
+
+type Direccion = z.infer<typeof direccionSchema>;
+```
+
+#### ubicacionSchema
+
+Facility location entity.
+
+```typescript
+const ubicacionSchema = z.object({
+  id: z.number(),
+  direccion_id: z.number().nullable().optional(),
+  edificio: z.string().nullable().optional(),
+  piso: z.string().nullable().optional(),
+  salon: z.string().nullable().optional(),
+  direccion: direccionSchema.optional(),
+});
+
+type Ubicacion = z.infer<typeof ubicacionSchema>;
+```
+
+#### articuloSchema
+
+Asset article/item entity.
+
+```typescript
+const articuloSchema = z.object({
+  id: z.number(),
+  tipo: z.string(),
+  marca: z.string().nullable().optional(),
+  modelo: z.string().nullable().optional(),
+  descripcion: z.string().nullable().optional(),
+});
+
+type Articulo = z.infer<typeof articuloSchema>;
+```
+
+#### activoSchema
+
+Asset/equipment entity.
+
+```typescript
+const activoSchema = z.object({
+  id: z.number(),
+  articulo_id: z.number().nullable().optional(),
+  ubicacion_id: z.number().nullable().optional(),
+  estado: z.enum([
+    'operativo',
+    'mantenimiento',
+    'fuera_servicio',
+    'baja'
+  ]).nullable().optional(),
+  valor: z.number().nullable().optional(),
+  created_at: z.string().optional(),
+  updated_at: z.string().optional(),
+  // Eager-loaded relationships
+  articulo: articuloSchema.optional(),
+  ubicacion: ubicacionSchema.optional(),
+});
+
+type Activo = z.infer<typeof activoSchema>;
+```
+
+#### reporteSchema
+
+Maintenance report entity.
+
+```typescript
+const reporteSchema = z.object({
+  id: z.number(),
+  usuario_id: z.number().nullable().optional(),
+  activo_id: z.number().nullable().optional(),
+  descripcion: z.string().nullable().optional(),
+  prioridad: z.string().nullable().optional(),
+  estado: z.string().nullable().optional(),
+  created_at: z.string().optional(),
+  updated_at: z.string().optional(),
+});
+
+type Reporte = z.infer<typeof reporteSchema>;
+```
+
+#### mantenimientoSchema
+
+Maintenance order entity.
+
+```typescript
+const mantenimientoSchema = z.object({
+  id: z.number(),
+  activo_id: z.number().nullable().optional(),
+  supervisor_id: z.number().nullable().optional(),
+  tecnico_principal_id: z.number().nullable().optional(),
+  tipo: z.string().nullable().optional(),
+  reporte_id: z.number().nullable().optional(),
+  fecha_apertura: z.string().optional(),
+  fecha_cierre: z.string().nullable().optional(),
+  estado: z.string(),
+  descripcion: z.string().nullable().optional(),
+  validado: z.boolean().nullable().optional(),
+  costo_total: z.union([z.number(), z.string()]).nullable().optional(),
+  created_at: z.string().optional(),
+  updated_at: z.string().optional(),
+  // Relationships
+  activo: activoSchema.optional(),
+  reporte: reporteSchema.nullable().optional(),
+});
+
+type Mantenimiento = z.infer<typeof mantenimientoSchema>;
+```
+
+#### calendarioSchema
+
+Scheduled maintenance entity.
+
+```typescript
+const calendarioSchema = z.object({
+  id: z.number(),
+  activo_id: z.number().nullable().optional(),
+  tecnico_asignado_id: z.number().nullable().optional(),
+  tipo: z.string().nullable().optional(),
+  fecha_programada: z.string().nullable().optional(),
+  estado: z.string().nullable().optional(),
+  created_at: z.string().nullable().optional(),
+  activo: activoSchema.optional(),
+});
+
+type CalendarioMantenimiento = z.infer<typeof calendarioSchema>;
+```
+
+#### proveedorSchema
+
+Supplier entity.
+
+```typescript
+const proveedorSchema = z.object({
+  id: z.number(),
+  nombre: z.string().nullable().optional(),
+  contacto: z.string().nullable().optional(),
+  telefono: z.string().nullable().optional(),
+  email: z.string().nullable().optional(),
+});
+
+type Proveedor = z.infer<typeof proveedorSchema>;
+```
+
+#### repuestoSchema
+
+Spare part/inventory entity.
+
+```typescript
+const repuestoSchema = z.object({
+  id: z.number(),
+  proveedor_id: z.number().nullable().optional(),
+  direccion_id: z.number().nullable().optional(),
+  descripcion: z.string().nullable().optional(),
+  codigo: z.string().nullable().optional(),
+  stock: z.number().nullable().optional(),
+  stock_minimo: z.number().nullable().optional(),
+  costo: z.union([z.number(), z.string()]).nullable().optional(),
+  created_at: z.string().nullable().optional(),
+  updated_at: z.string().nullable().optional(),
+  proveedor: proveedorSchema.optional(),
+});
+
+type Repuesto = z.infer<typeof repuestoSchema>;
+```
+
+## Chat API Schemas
+
+Location: `app/lib/schemas/chat.ts`
+
+### messagePartSchema
+
+Validates message content parts (text, image, file).
+
+```typescript
+const messagePartSchema = z.discriminatedUnion('type', [
+  // Text part
+  z.object({
+    type: z.literal('text'),
+    text: z.string(),
+  }),
+  // Image part
+  z.object({
+    type: z.literal('image'),
+    imageUrl: z.string().url(),
+    mimeType: z.string(),
+  }),
+  // File part
+  z.object({
+    type: z.literal('file'),
+    data: z.string(),
+    mediaType: z.string(),
+  }),
+]);
+```
+
+#### Type Export
+
+```typescript
+type MessagePart = z.infer<typeof messagePartSchema>;
+```
+
+### messageSchema
+
+Validates individual chat messages.
+
+```typescript
+const messageSchema = z.object({
+  role: z.enum(['user', 'assistant', 'system']),
+  content: z.union([
+    z.string().max(10000),
+    z.object({
+      parts: z.array(messagePartSchema).optional(),
+      text: z.string().optional(),
+    }),
+  ]).optional().default(''),
+  parts: z.array(messagePartSchema).optional().catch(undefined),
+  id: z.string().optional(),
+  createdAt: z.preprocess(
+    (val) => {
+      if (val instanceof Date) return val;
+      if (typeof val === 'string') return new Date(val);
+      return undefined;
+    },
+    z.date().optional()
+  ),
+});
+```
+
+#### Fields
+
+<ParamField path="role" type="enum" required>
+  Message role: `user`, `assistant`, `system`
+</ParamField>
+
+<ParamField path="content" type="string | object" optional>
+  Message content (max 10KB for strings)
+</ParamField>
+
+<ParamField path="parts" type="MessagePart[]" optional>
+  Message parts for multimodal content. Invalid parts are ignored instead of failing.
+</ParamField>
+
+<ParamField path="id" type="string" optional>
+  Message identifier
+</ParamField>
+
+<ParamField path="createdAt" type="Date" optional>
+  Message timestamp (auto-converted from string)
+</ParamField>
+
+#### Type Export
+
+```typescript
+type Message = z.infer<typeof messageSchema>;
+```
+
+### chatRequestSchema
+
+Validates complete chat API requests.
+
+```typescript
+const chatRequestSchema = z.object({
+  messages: z.array(messageSchema)
+    .min(1, 'Se requiere al menos un mensaje')
+    .max(100, 'Demasiados mensajes (max 100)'),
+  model: z.enum(AVAILABLE_MODELS).optional().default(DEFAULT_MODEL),
+});
+```
+
+#### Constraints
+
+- **Messages:** 1-100 messages (DoS prevention)
+- **Model:** Validated against `AVAILABLE_MODELS` whitelist
+
+#### Type Export
+
+```typescript
+type ChatRequest = z.infer<typeof chatRequestSchema>;
+```
+
+## Constants
+
+Location: `app/constants/ai.ts`
+
+### ASSET_TYPES
+
+```typescript
+const ASSET_TYPES = [
+  'unidad-hvac',
+  'caldera',
+  'bomba',
+  'compresor',
+  'generador',
+  'panel-electrico',
+  'transportador',
+  'grua',
+  'montacargas',
+  'otro',
+] as const;
+
+type AssetType = (typeof ASSET_TYPES)[number];
+```
+
+### TASK_TYPES
+
+```typescript
+const TASK_TYPES = [
+  'preventivo',
+  'correctivo',
+  'predictivo'
+] as const;
+
+type TaskType = (typeof TASK_TYPES)[number];
+```
+
+### CHECKLIST_LIMITS
+
+```typescript
+const CHECKLIST_LIMITS = {
+  MIN_ITEMS: 3,
+  MAX_ITEMS: 50,
+  MAX_TITLE_LENGTH: 100,
+  MAX_ITEM_DESCRIPTION_LENGTH: 150,
+} as const;
+```
+
+## Schema Patterns
+
+### Optional Nullable Fields
+
+Backend entity schemas use `.nullable().optional()` for Laravel nullable fields:
+
+```typescript
+z.string().nullable().optional()
+```
+
+This handles:
+- `null` from database
+- `undefined` when field is omitted
+- Valid string values
+
+### Preprocessing
+
+Many schemas use `.preprocess()` for normalization:
+
+```typescript
+z.preprocess(
+  (val) => {
+    // Normalize input before validation
+    if (Array.isArray(val)) return val[0];
+    return val;
+  },
+  z.string()
+)
+```
+
+### Union Types for Flexible Fields
+
+Some fields accept multiple types:
+
+```typescript
+costo_total: z.union([z.number(), z.string()]).nullable().optional()
+```
+
+Handles Laravel returning numbers as strings in some contexts.
+
+### Discriminated Unions
+
+Used for better performance and error messages:
+
+```typescript
+z.discriminatedUnion('type', [
+  z.object({ type: z.literal('text'), text: z.string() }),
+  z.object({ type: z.literal('image'), imageUrl: z.string() }),
+])
+```
+
+## Validation Patterns
+
+### Request Validation
+
+```typescript
+import { checklistGenerationRequestSchema } from '@/app/lib/schemas';
+
+try {
+  const validated = checklistGenerationRequestSchema.parse(request);
+  // Use validated data
+} catch (error) {
+  if (error instanceof z.ZodError) {
+    // Handle validation errors
+    console.error(error.errors);
+  }
+}
+```
+
+### Safe Parsing
+
+```typescript
+const result = checklistSchema.safeParse(data);
+
+if (result.success) {
+  console.log(result.data); // Validated data
+} else {
+  console.error(result.error); // ZodError
+}
+```
+
+### Type Inference
+
+```typescript
+import type { Checklist, ActivitySummary } from '@/app/lib/schemas';
+
+const checklist: Checklist = {
+  id: '123',
+  title: 'Maintenance Checklist',
+  // ... TypeScript provides autocomplete
+};
+```
+
+## Error Messages
+
+Schemas provide custom error messages for better UX:
+
+```typescript
+z.string().max(500, 'Instrucciones demasiado largas (máx 500 caracteres)')
+z.array(items).min(3, 'Mínimo 3 items requeridos')
+z.enum(values, { error: 'Tipo de activo inválido' })
+```
+
+## Related Documentation
+
+- [Chat Tools](/api-reference/tools/chat-tools) - Tool implementations using these schemas
+- [Backend API Service](/api-reference/services/backend-api) - API client using Laravel schemas
+- [AI Services](/api-reference/services/ai-services) - AI service implementations

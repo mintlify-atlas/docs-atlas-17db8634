@@ -1,0 +1,470 @@
+---
+title: 'Project Structure'
+description: 'Detailed breakdown of the GIMA AI Chatbot file and folder organization'
+---
+
+## Directory Overview
+
+The GIMA AI Chatbot follows Next.js 16 App Router conventions with a feature-based organization pattern.
+
+```
+gima-ai-chatbot/
+├── app/                    # Next.js App Router directory
+│   ├── actions/           # Server Actions
+│   ├── api/               # API Routes
+│   ├── components/        # React Components
+│   ├── config/            # Configuration files
+│   ├── constants/         # Application constants
+│   ├── hooks/             # Custom React hooks
+│   ├── lib/               # Core libraries and services
+│   ├── tools/             # Tool pages (routes)
+│   ├── types/             # TypeScript types
+│   ├── utils/             # Utility functions
+│   ├── layout.tsx         # Root layout
+│   ├── page.tsx           # Home page (Chat)
+│   └── globals.css        # Global styles
+├── docs/                  # Documentation (this site)
+├── public/                # Static assets
+├── tests/                 # Test files
+└── [config files]         # Root configuration files
+```
+
+## Core Directories
+
+### `/app` - Application Root
+
+The main application directory following Next.js App Router structure.
+
+#### Key Files
+
+<CodeGroup>
+```tsx app/layout.tsx
+// Root layout with fonts, metadata, and providers
+export const metadata: Metadata = {
+  title: 'GIMA Chatbot - Sistema de Gestión de Mantenimiento',
+  description: 'Asistente inteligente para la gestión de mantenimiento...'
+};
+
+export default function RootLayout({ children }) {
+  return (
+    <html lang="es" suppressHydrationWarning>
+      <body>
+        <ErrorBoundary>
+          <ToastProvider>{children}</ToastProvider>
+        </ErrorBoundary>
+      </body>
+    </html>
+  );
+}
+```
+
+```tsx app/page.tsx
+// Home page - dynamically loads Chat component
+const Chat = dynamic(
+  () => import('@components/features/chat').then(mod => ({ default: mod.Chat })),
+  { ssr: false }
+);
+
+export default function ChatPage() {
+  return <Chat />;
+}
+```
+</CodeGroup>
+
+### `/app/actions` - Server Actions
+
+Next.js Server Actions for server-side operations.
+
+```
+actions/
+├── __tests__/                    # Action tests
+├── activity-summary.ts           # AI activity summary generation
+├── auth.ts                       # Authentication actions
+├── checklist.ts                  # AI checklist generation
+├── data-transformation.ts        # Data processing utilities
+├── files.ts                      # File upload handling (PDFs)
+├── index.ts                      # Barrel export
+├── vision.ts                     # Image analysis with Gemini Vision
+└── voice.ts                      # Voice transcription with Gemini
+```
+
+**Key Actions:**
+
+- `analyzeImage()`: Vision analysis for industrial parts
+- `transcribeAudio()`: Speech-to-text transcription
+- `extractPDFContent()`: PDF text extraction and analysis
+- `generateChecklist()`: AI-powered maintenance checklist
+- `generateActivitySummary()`: Professional activity reports
+
+### `/app/api` - API Routes
+
+Next.js API Routes for backend endpoints.
+
+```
+api/
+└── chat/
+    ├── __tests__/
+    │   └── route.test.ts
+    └── route.ts              # Main chat API endpoint
+```
+
+**`/api/chat` Route** (`app/api/chat/route.ts:83`)
+
+- POST endpoint for chat messages
+- Streams AI responses using Vercel AI SDK
+- Handles tool calls and authentication
+- Rate limiting and IP validation
+
+### `/app/components` - React Components
+
+Organized by type and feature:
+
+```
+components/
+├── ai-elements/          # AI-specific components (30+ files)
+│   ├── artifact.tsx
+│   ├── code-block.tsx
+│   ├── message.tsx
+│   ├── reasoning.tsx
+│   └── ...
+├── features/             # Feature modules
+│   ├── ai-tools/        # AI tool interfaces
+│   ├── chat/            # Chat interface
+│   ├── theme/           # Theme switcher
+│   └── voice/           # Voice command system
+├── shared/               # Shared components
+│   ├── confirm-dialog.tsx
+│   └── error-boundary.tsx
+└── ui/                   # Base UI components (shadcn/ui)
+    ├── button.tsx
+    ├── card.tsx
+    ├── dialog.tsx
+    └── ...
+```
+
+#### Component Categories
+
+<Tabs>
+  <Tab title="ai-elements/">
+    **AI-Specific Components**
+    
+    Pre-built components for AI interactions from the Vercel AI SDK ecosystem.
+    
+    - `artifact.tsx`: Display AI-generated artifacts
+    - `code-block.tsx`: Syntax-highlighted code display
+    - `message.tsx`: Chat message rendering
+    - `reasoning.tsx`: AI reasoning visualization
+    - `tool.tsx`: Tool call result display
+    - And 25+ more specialized components
+  </Tab>
+  
+  <Tab title="features/">
+    **Feature Modules**
+    
+    Self-contained feature implementations with their own hooks, types, and sub-components.
+    
+    **`features/chat/`** - Main chat interface
+    - `chat.tsx`: Main orchestrator
+    - `chat-conversation.tsx`: Message list
+    - `chat-input-area.tsx`: Input controls
+    - `chat-message.tsx`: Individual messages
+    - `hooks/`: Chat-specific hooks
+    - `cards/`: Result card components
+    
+    **`features/ai-tools/`** - AI tool interfaces
+    - `activity-summary/`: Activity summary generator
+    - `checklist-builder/`: Checklist creation tool
+    - `data-transformation/`: Data processing tool
+    - `work-order-closeout/`: Work order notes
+    - `shared/`: Shared AI tool components
+    
+    **`features/voice/`** - Voice command system
+    - `voice-command-mode.tsx`: Command UI
+    - `voice-button.tsx`: Recording button
+    - `audio-waveform.tsx`: Visual feedback
+    - `hooks/`: Voice-specific hooks
+  </Tab>
+  
+  <Tab title="ui/">
+    **Base UI Components**
+    
+    Foundational design system components based on Radix UI and shadcn/ui.
+    
+    - `button.tsx`: Button variants
+    - `card.tsx`: Card layouts
+    - `dialog.tsx`: Modal dialogs
+    - `input.tsx`: Form inputs
+    - `select.tsx`: Dropdown selects
+    - And 15+ more primitives
+  </Tab>
+</Tabs>
+
+### `/app/config` - Configuration
+
+Centralized application configuration:
+
+```
+config/
+├── __tests__/
+├── env.ts                # Environment variable validation
+├── index.ts              # Barrel export
+├── limits.ts             # Rate limits and quotas
+├── models.ts             # AI model configurations
+├── prompts/              # AI system prompts
+│   ├── activity-summary-generation.ts
+│   ├── checklist-generation.ts
+│   ├── closeout-generation.ts
+│   └── voice-master-prompt.ts
+└── server.ts             # Server configuration & SYSTEM_PROMPT
+```
+
+**Key Files:**
+
+- **`env.ts`** (`app/config/env.ts:1`): Validates environment variables with Zod
+- **`server.ts`** (`app/config/server.ts:40`): Contains the main SYSTEM_PROMPT and glossary
+- **`models.ts`**: AI model selection and configuration
+
+### `/app/lib` - Core Libraries
+
+Core business logic, services, and utilities:
+
+```
+lib/
+├── __tests__/
+├── ai/                           # AI configuration
+│   ├── base-ai-service.ts       # Base AI service class
+│   └── tools/
+│       ├── chat-tools.ts        # Tool definitions
+│       └── tool-types.ts        # Tool type definitions
+├── schemas/                      # Zod validation schemas
+│   ├── activity-summary.schema.ts
+│   ├── backend-response.schema.ts
+│   ├── chat.ts
+│   ├── checklist.schema.ts
+│   ├── data-transformation.schema.ts
+│   ├── vision.schema.ts
+│   └── work-order-closeout.schema.ts
+├── services/                     # Business logic services
+│   ├── __tests__/
+│   ├── activity-summary-ai-service.ts
+│   ├── backend-api-service.ts   # Laravel API client
+│   ├── chat-service.ts          # Main chat orchestration
+│   ├── checklist-ai-service.ts
+│   ├── voice-command-parser.ts
+│   ├── work-order-closeout-ai-service.ts
+│   └── work-order-service.ts
+├── validation/
+│   └── file-validation.ts       # File upload validation
+├── ip-utils.ts                   # IP extraction utilities
+├── logger.ts                     # Structured logging
+├── rate-limiter.ts              # Rate limiting logic
+└── utils.ts                      # General utilities
+```
+
+#### Key Services
+
+<AccordionGroup>
+  <Accordion title="ChatService" icon="message-square">
+    **`lib/services/chat-service.ts`**
+    
+    Main orchestrator for chat functionality:
+    - Validates incoming messages
+    - Manages rate limiting
+    - Coordinates AI streaming
+    - Handles tool execution
+    - Error handling and logging
+  </Accordion>
+  
+  <Accordion title="BackendAPIService" icon="server">
+    **`lib/services/backend-api-service.ts`**
+    
+    HTTP client for Laravel backend:
+    - Bearer token authentication
+    - Automatic retry with exponential backoff
+    - Timeout handling (8s default)
+    - Response unwrapping and validation
+    - Type-safe API methods
+    
+    **Methods:**
+    - `getActivos()`: Fetch assets
+    - `getMantenimientos()`: Fetch maintenance orders
+    - `getReportes()`: Fetch reports
+    - `getInventario()`: Fetch inventory
+    - `getProveedores()`: Fetch suppliers
+  </Accordion>
+  
+  <Accordion title="Chat Tools" icon="wrench">
+    **`lib/ai/tools/chat-tools.ts`**
+    
+    Defines AI tools using Vercel AI SDK:
+    - `consultar_activos`: Query assets
+    - `consultar_mantenimientos`: Query maintenance
+    - `consultar_calendario`: View calendar
+    - `consultar_reportes`: Query reports
+    - `consultar_inventario`: Search inventory
+    - `consultar_proveedores`: List suppliers
+    - `generar_checklist`: Generate maintenance checklist
+    - `generar_resumen_actividad`: Generate activity summary
+    - `crear_orden_trabajo`: Create work order (client-side)
+  </Accordion>
+</AccordionGroup>
+
+### `/app/hooks` - Custom Hooks
+
+Reusable React hooks:
+
+```
+hooks/
+├── __tests__/
+├── use-file-upload.ts           # File upload handling
+├── use-keyboard-shortcuts.ts    # Keyboard navigation
+├── use-persistent-chat.ts       # Chat history persistence
+├── use-voice-input.ts           # Voice recording
+└── use-work-order-commands.ts   # Work order execution
+```
+
+**Key Hooks:**
+
+- **`usePersistentChat`** (`app/hooks/use-persistent-chat.ts:1`): Wraps `useChat` with localStorage persistence
+- **`useVoiceInput`** (`app/hooks/use-voice-input.ts:1`): Dual voice system (Gemini + Web Speech API)
+- **`useWorkOrderCommands`** (`app/hooks/use-work-order-commands.ts:1`): Execute voice commands
+
+### `/app/types` - TypeScript Types
+
+Shared type definitions:
+
+```
+types/
+├── __tests__/
+├── chat.types.ts              # Chat-related types
+├── voice-commands.ts          # Voice command types
+└── work-order-validation.ts   # Work order validation types
+```
+
+### `/app/tools` - Tool Pages
+
+Standalone tool interfaces (routes):
+
+```
+tools/
+├── activity-summaries/
+│   └── page.tsx              # /tools/activity-summaries
+├── checklist-builder/
+│   └── page.tsx              # /tools/checklist-builder
+├── data-transformation/
+│   └── page.tsx              # /tools/data-transformation
+├── image-upload-test/
+│   └── page.tsx              # /tools/image-upload-test
+├── pdf-upload-test/
+│   └── page.tsx              # /tools/pdf-upload-test
+├── layout.tsx                # Shared tools layout
+└── page.tsx                  # /tools dashboard
+```
+
+## Configuration Files
+
+### Root Configuration
+
+<CodeGroup>
+```json package.json
+{
+  "name": "gima-ai-chatbot",
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "test": "vitest",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "next": "16.0.10",
+    "react": "19.2.1",
+    "ai": "^5.0.115",
+    "zod": "^4.2.1"
+  }
+}
+```
+
+```json tsconfig.json
+{
+  "compilerOptions": {
+    "strict": true,
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "paths": {
+      "@/*": ["./app/*"],
+      "@components/*": ["./app/components/*"]
+    }
+  }
+}
+```
+
+```js tailwind.config.js
+module.exports = {
+  content: ['./app/**/*.{ts,tsx}'],
+  theme: {
+    extend: {
+      // Custom theme extensions
+    }
+  },
+  plugins: []
+}
+```
+</CodeGroup>
+
+## Import Aliases
+
+The project uses TypeScript path aliases for cleaner imports:
+
+```typescript
+// Instead of:
+import { Button } from '../../../components/ui/button';
+
+// Use:
+import { Button } from '@/app/components/ui/button';
+// Or:
+import { Button } from '@components/ui/button';
+```
+
+**Configured Aliases:**
+
+- `@/*` → `./app/*`
+- `@components/*` → `./app/components/*`
+
+## File Naming Conventions
+
+<CardGroup cols={2}>
+  <Card title="Components" icon="layer-group">
+    - `kebab-case.tsx` for files
+    - `PascalCase` for component names
+    - Example: `chat-message.tsx` exports `ChatMessage`
+  </Card>
+  
+  <Card title="Services" icon="gear">
+    - `kebab-case.ts` for files
+    - `PascalCase` for class names
+    - Example: `chat-service.ts` exports `ChatService`
+  </Card>
+  
+  <Card title="Hooks" icon="link">
+    - `use-feature-name.ts` pattern
+    - Example: `use-persistent-chat.ts`
+  </Card>
+  
+  <Card title="Types" icon="code">
+    - `feature.types.ts` pattern
+    - Example: `chat.types.ts`
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Component Architecture" icon="boxes" href="/architecture/components">
+    Understand the component hierarchy and patterns
+  </Card>
+  
+  <Card title="Development Guide" icon="code" href="/development/setup">
+    Set up your development environment
+  </Card>
+</CardGroup>

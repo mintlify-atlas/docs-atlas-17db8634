@@ -1,0 +1,335 @@
+---
+title: Generative Tables
+description: Dynamic data tables that display backend results as interactive generative UI components
+icon: table
+---
+
+Generative tables transform structured data from backend APIs into rich, interactive table components that adapt to the tool being executed and the data being displayed.
+
+## Overview
+
+The `DataResultCard` component is the primary generative table implementation in Gima AI. It receives paginated data from backend tools and automatically:
+
+- Selects optimal columns based on the tool type
+- Applies context-aware formatting and badges
+- Provides collapsible UI with pagination info
+- Highlights critical data (low stock, priority levels, status)
+
+## Architecture
+
+### Backend Integration
+
+Generative tables consume data from chat tools defined in `/app/lib/ai/tools/chat-tools.ts`. Each tool returns:
+
+```typescript
+interface ToolResponse {
+  success: boolean;
+  data: {
+    items: Record<string, unknown>[];
+    pagination: {
+      page: number;
+      lastPage: number;
+      total: number;
+      hasMore: boolean;
+    };
+  };
+  summary?: string;
+}
+```
+
+### Tool-Specific Columns
+
+Columns are automatically selected based on the tool name using `getToolColumns()`. Supported tools:
+
+<AccordionGroup>
+  <Accordion title="consultar_activos - Asset Query">
+    Displays asset information with equipment details:
+    
+    - **ID**: Asset identifier
+    - **Descripción**: Equipment description or model
+    - **Estado**: Status badge (operational, maintenance, out of service)
+    - **Tipo**: Asset type from article data
+    - **Ubicación**: Location (building and room)
+  </Accordion>
+
+  <Accordion title="consultar_inventario - Inventory Query">
+    Shows spare parts inventory with stock indicators:
+    
+    - **Código**: Part code
+    - **Repuesto**: Part description
+    - **Stock**: Current stock with color-coded warnings
+    - **Mín.**: Minimum stock threshold
+    - **Costo**: Unit cost
+  </Accordion>
+
+  <Accordion title="consultar_mantenimientos - Maintenance Query">
+    Lists maintenance orders with priority:
+    
+    - **ID**: Order identifier
+    - **Descripción**: Work description
+    - **Tipo**: Maintenance type (preventivo, correctivo, predictivo)
+    - **Prioridad**: Priority badge (baja, media, alta)
+    - **Estado**: Status badge
+  </Accordion>
+
+  <Accordion title="consultar_reportes - Reports Query">
+    Displays maintenance reports:
+    
+    - **ID**: Report identifier
+    - **Activo**: Associated asset description
+    - **Prioridad**: Priority badge
+    - **Estado**: Status badge
+    - **Descripción**: Report description
+  </Accordion>
+
+  <Accordion title="consultar_calendario - Calendar Query">
+    Shows scheduled maintenance:
+    
+    - **Fecha**: Scheduled date
+    - **Activo**: Asset description
+    - **Tipo**: Maintenance type
+    - **Estado**: Status badge
+  </Accordion>
+
+  <Accordion title="consultar_proveedores - Suppliers Query">
+    Lists supplier contacts:
+    
+    - **Proveedor**: Supplier name
+    - **Contacto**: Contact person
+    - **Email**: Email address
+    - **Teléfono**: Phone number
+  </Accordion>
+</AccordionGroup>
+
+### Generic Columns Fallback
+
+For unknown tools, columns are auto-detected from the data:
+
+```typescript
+function getGenericColumns(items: Record<string, unknown>[]): ColumnDef[] {
+  // Extracts first 5 relevant fields
+  // Prioritizes: id, nombre, descripcion, estado, tipo, etc.
+  // Filters out objects, arrays, and internal fields
+}
+```
+
+## Visual Indicators
+
+### Status Badges
+
+<CodeGroup>
+```typescript Status Colors
+const STATUS_COLORS = {
+  operativo: 'green',      // Operational, active, available
+  activo: 'green',
+  disponible: 'green',
+  completado: 'green',
+  en_mantenimiento: 'yellow',  // In maintenance, pending
+  mantenimiento: 'yellow',
+  pendiente: 'yellow',
+  en_progreso: 'blue',     // In progress
+  fuera_servicio: 'red',   // Out of service, inactive, cancelled
+  inactivo: 'red',
+  cancelado: 'red',
+};
+```
+
+```typescript Priority Colors
+const PRIORITY_COLORS = {
+  alta: 'red',      // High, critical
+  critica: 'red',
+  media: 'yellow',  // Medium, normal
+  normal: 'blue',
+  baja: 'green',    // Low
+};
+```
+</CodeGroup>
+
+### Stock Indicators
+
+Inventory tables display color-coded stock levels:
+
+- **Critical**: Red (stock ≤ minimum)
+- **Warning**: Yellow (stock ≤ minimum × 1.5)
+- **Normal**: Default color
+
+```typescript
+function StockIndicator({ stock, stockMin }) {
+  const isCritical = stockMin && stock <= stockMin;
+  const isWarning = stockMin && stock <= stockMin * 1.5;
+  // Returns formatted value with color class
+}
+```
+
+## Component Usage
+
+### Basic Table
+
+```tsx
+import { DataResultCard } from '@/app/components/features/chat/tool-result-cards';
+
+function ChatMessage({ toolResult }) {
+  return (
+    <DataResultCard
+      data={{
+        items: toolResult.items,
+        pagination: toolResult.pagination,
+      }}
+      toolName="tool-consultar_activos"
+      summary="Found 25 assets in the system"
+    />
+  );
+}
+```
+
+### Loading State
+
+```tsx
+import { ToolLoadingCard } from '@/app/components/features/chat/tool-result-cards';
+
+function ChatMessage({ toolName }) {
+  return <ToolLoadingCard toolName="tool-consultar_inventario" />;
+}
+```
+
+### Error State
+
+```tsx
+import { ToolErrorCard } from '@/app/components/features/chat/tool-result-cards';
+
+function ChatMessage({ error }) {
+  return (
+    <ToolErrorCard
+      error="Database connection timeout"
+      suggestion="Try again with more specific filters"
+    />
+  );
+}
+```
+
+## Custom Rendering
+
+Column definitions support custom render functions:
+
+```typescript
+interface ColumnDef {
+  key: string;
+  label: string;
+  render?: (value: unknown, item: Record<string, unknown>) => ReactNode;
+}
+
+// Example: Custom badge rendering
+{
+  key: 'estado',
+  label: 'Estado',
+  render: (v) => v ? <StatusBadge value={String(v)} /> : '—',
+}
+
+// Example: Nested data access
+{
+  key: 'sede',
+  label: 'Ubicación',
+  render: (_, item) => {
+    const ubic = item.ubicacion as Record<string, unknown>;
+    return [ubic?.edificio, ubic?.salon].filter(Boolean).join(' - ') || '—';
+  },
+}
+```
+
+## Data Formatting
+
+### Cell Value Formatting
+
+```typescript
+function formatCellValue(value: unknown): string {
+  if (value === null || value === undefined) return '—';
+  if (typeof value === 'boolean') return value ? 'Sí' : 'No';
+  if (typeof value === 'number') return value.toLocaleString('es-VE');
+  return String(value);
+}
+```
+
+### Column Header Formatting
+
+```typescript
+function formatColumnHeader(key: string): string {
+  return key
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+```
+
+## Interaction Features
+
+### Collapsible UI
+
+Tables can be expanded or collapsed:
+
+```tsx
+const [expanded, setExpanded] = useState(true);
+
+<button onClick={() => setExpanded(!expanded)}>
+  {expanded ? <ChevronUp /> : <ChevronDown />}
+</button>
+```
+
+### Pagination Display
+
+```tsx
+{data.pagination.lastPage > 1 && (
+  <span className="text-xs text-muted-foreground">
+    Pág. {data.pagination.page}/{data.pagination.lastPage}
+  </span>
+)}
+```
+
+## Accessibility
+
+All tables include proper ARIA attributes:
+
+```tsx
+<div role="region" aria-label={`Resultados de ${toolLabel}`}>
+  <table role="table" aria-label={`Tabla de ${toolLabel}`}>
+    {/* Table content */}
+  </table>
+</div>
+```
+
+## Performance
+
+The backend limits results to prevent token overflow:
+
+```typescript
+// From chat-tools.ts
+const MAX_ITEMS_PER_RESPONSE = 15;
+const MAX_DESCRIPTION_LENGTH = 120;
+
+const items = result.items.slice(0, MAX_ITEMS_PER_RESPONSE);
+```
+
+<Note>
+  Large datasets are truncated server-side. Use pagination or filters to access more results.
+</Note>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Column Selection" icon="columns">
+    Choose 3-5 most relevant columns for mobile responsiveness
+  </Card>
+  <Card title="Custom Rendering" icon="paintbrush">
+    Use render functions for badges, nested data, and formatting
+  </Card>
+  <Card title="Loading States" icon="spinner">
+    Always show loading cards while tools execute
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation">
+    Provide helpful suggestions in error cards
+  </Card>
+</CardGroup>
+
+## Related Components
+
+- [Tool Cards](/components/ai-elements/tool-cards) - Wrapper components for tool execution
+- [Chat Message](/components/chat/message) - Parent message container
+- [Chat Tools](/api-reference/tools/chat-tools) - Backend query tools

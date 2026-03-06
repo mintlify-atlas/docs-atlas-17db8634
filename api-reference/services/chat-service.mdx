@@ -1,0 +1,277 @@
+---
+title: 'Chat Service'
+description: 'AI-powered chat message processing with rate limiting and validation'
+icon: 'messages'
+---
+
+## Overview
+
+The `ChatService` handles AI-powered chat message processing for the Gima chatbot. It integrates with GROQ AI models, provides rate limiting, request validation, and streaming text generation with tool support.
+
+### Key Features
+
+- **AI Integration**: Uses GROQ models (llama-3.1-8b-instant) for chat generation
+- **Rate Limiting**: IP-based rate limiting to prevent abuse
+- **Request Validation**: Zod schema validation for incoming messages
+- **Message Sanitization**: Context injection and tool result summarization
+- **Streaming Support**: Real-time streaming responses with AI SDK
+- **Tool Execution**: Supports chat tools for querying backend data
+- **History Management**: Maintains conversation context (last 8 messages)
+
+## Class Definition
+
+```typescript
+export class ChatService {
+  constructor(dependencies?: Partial<ChatServiceDependencies>)
+  async processMessage(rawBody: unknown, clientIP: string | null): Promise<StreamTextResult>
+}
+```
+
+## Constructor
+
+### Parameters
+
+<ParamField path="dependencies" type="Partial<ChatServiceDependencies>" optional>
+  Dependency injection for testing and customization
+  
+  <Expandable title="properties">
+    <ParamField path="logger" type="Logger">
+      Custom logger instance (defaults to built-in logger)
+    </ParamField>
+    <ParamField path="rateLimiter" type="RateLimiter">
+      Custom rate limiter (defaults to chatRateLimiter)
+    </ParamField>
+    <ParamField path="modelProvider" type="(modelId: string) => LanguageModel">
+      Custom AI model provider (defaults to GROQ)
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Example
+
+```typescript
+import { ChatService } from '@/app/lib/services/chat-service';
+
+// Default configuration
+const chatService = new ChatService();
+
+// With custom dependencies (for testing)
+const testService = new ChatService({
+  logger: mockLogger,
+  rateLimiter: mockRateLimiter,
+  modelProvider: mockModelProvider,
+});
+```
+
+## Methods
+
+### processMessage()
+
+Processes a chat message request through the AI pipeline with rate limiting, validation, and streaming.
+
+```typescript
+async processMessage(
+  rawBody: unknown,
+  clientIP: string | null
+): Promise<StreamTextResult>
+```
+
+#### Parameters
+
+<ParamField path="rawBody" type="unknown" required>
+  Raw JSON body from the chat request. Must conform to `chatRequestSchema`:
+  
+  ```typescript
+  {
+    messages: CoreMessage[],  // Conversation history
+    model: string              // Model ID (e.g., 'llama-3.1-8b-instant')
+  }
+  ```
+</ParamField>
+
+<ParamField path="clientIP" type="string | null" required>
+  Client's IP address for rate limiting. Pass `null` to skip rate limiting.
+</ParamField>
+
+#### Returns
+
+<ResponseField name="result" type="StreamTextResult">
+  AI SDK streaming result object with:
+  - `textStream`: Readable stream of generated text
+  - `usage`: Token usage information
+  - `finishReason`: Completion status
+</ResponseField>
+
+#### Throws
+
+<ResponseField name="RateLimitError" type="Error">
+  Thrown when client exceeds rate limit. Contains `retryAfter` seconds.
+</ResponseField>
+
+<ResponseField name="ValidationError" type="Error">
+  Thrown when request body fails validation. Contains Zod error `details`.
+</ResponseField>
+
+#### Processing Pipeline
+
+1. **Rate Limiting**: Checks IP-based limits (if clientIP provided)
+2. **Validation**: Validates request against Zod schema
+3. **Sanitization**: Cleans messages and injects tool context
+4. **History Truncation**: Keeps last 8 messages to stay within token limits
+5. **AI Generation**: Streams response with tool support (max 5 steps)
+
+#### Example
+
+```typescript
+import { ChatService } from '@/app/lib/services/chat-service';
+
+const chatService = new ChatService();
+
+try {
+  const result = await chatService.processMessage(
+    {
+      messages: [
+        { role: 'user', content: '¿Cuáles son los mantenimientos pendientes?' }
+      ],
+      model: 'llama-3.1-8b-instant'
+    },
+    '192.168.1.1'
+  );
+
+  // Stream the response
+  for await (const chunk of result.textStream) {
+    console.log(chunk);
+  }
+} catch (error) {
+  if (error instanceof RateLimitError) {
+    console.log(`Rate limited. Retry after ${error.retryAfter}s`);
+  } else if (error instanceof ValidationError) {
+    console.log('Invalid request:', error.details);
+  }
+}
+```
+
+## Error Handling
+
+### RateLimitError
+
+Thrown when client exceeds the configured rate limit.
+
+```typescript
+class RateLimitError extends Error {
+  retryAfter: number;  // Seconds until next allowed request
+}
+```
+
+### ValidationError
+
+Thrown when request body fails Zod validation.
+
+```typescript
+class ValidationError extends Error {
+  details: ZodIssue[];  // Detailed validation errors
+}
+```
+
+## Configuration
+
+### System Prompt
+
+Defined in `@/app/config` as `SYSTEM_PROMPT`. Configures the AI assistant's behavior and role.
+
+### Message History Limit
+
+```typescript
+const MAX_HISTORY_MESSAGES = 8;
+```
+
+Limits conversation history to prevent exceeding GROQ's 6000 TPM (tokens per minute) limit.
+
+### Tool Integration
+
+Chat tools are defined in `@/app/lib/ai/tools/chat-tools` and include:
+- Asset queries
+- Maintenance schedule lookups
+- Spare parts inventory
+- Report generation
+
+### Step Limit
+
+```typescript
+stopWhen: stepCountIs(5)
+```
+
+Limits multi-step tool execution to 5 steps maximum.
+
+## Usage in API Routes
+
+```typescript
+// app/api/chat/route.ts
+import { ChatService } from '@/app/lib/services/chat-service';
+import { headers } from 'next/headers';
+
+export async function POST(request: Request) {
+  const chatService = new ChatService();
+  const body = await request.json();
+  
+  // Extract client IP
+  const headersList = headers();
+  const clientIP = headersList.get('x-forwarded-for')?.split(',')[0] || null;
+
+  try {
+    const result = await chatService.processMessage(body, clientIP);
+    return result.toDataStreamResponse();
+  } catch (error) {
+    if (error instanceof RateLimitError) {
+      return new Response('Too many requests', {
+        status: 429,
+        headers: { 'Retry-After': String(error.retryAfter) }
+      });
+    }
+    throw error;
+  }
+}
+```
+
+## Testing
+
+The service supports dependency injection for easy testing:
+
+```typescript
+import { ChatService } from '@/app/lib/services/chat-service';
+import { vi } from 'vitest';
+
+const mockLogger = {
+  info: vi.fn(),
+  error: vi.fn(),
+};
+
+const mockRateLimiter = {
+  checkLimit: vi.fn(() => true),
+  getRetryAfter: vi.fn(() => 0),
+};
+
+const testService = new ChatService({
+  logger: mockLogger,
+  rateLimiter: mockRateLimiter,
+});
+
+// Run tests...
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Backend API Service" icon="server" href="/api-reference/services/backend-api">
+    HTTP client for Laravel backend data
+  </Card>
+  <Card title="Chat Tools" icon="wrench" href="/api-reference/ai/chat-tools">
+    Available tools for chat interactions
+  </Card>
+  <Card title="Rate Limiter" icon="gauge" href="/api-reference/utils/rate-limiter">
+    Rate limiting implementation
+  </Card>
+  <Card title="Schemas" icon="code" href="/api-reference/utils/schemas">
+    Request validation schemas
+  </Card>
+</CardGroup>

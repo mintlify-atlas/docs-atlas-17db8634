@@ -1,122 +1,147 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "Gima AI Chatbot",
+  "theme": "palm",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#153b98",
+    "light": "#849cc4",
+    "dark": "#d3dae7"
   },
   "favicon": "/favicon.svg",
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/jose-miserol/gima-ai-chatbot"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/jose-miserol/gima-ai-chatbot"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
             "pages": [
-              "index",
+              "introduction",
               "quickstart",
-              "development"
+              "installation"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Core Features",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "features/multimodal-chat",
+              "features/voice-commands",
+              "features/image-analysis",
+              "features/pdf-processing"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "AI Tools",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "ai-tools/overview",
+              "ai-tools/checklist-builder",
+              "ai-tools/activity-summaries",
+              "ai-tools/work-order-closeout",
+              "ai-tools/data-transformation"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Guides",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "guides/configuration",
+              "guides/ai-models",
+              "guides/backend-integration",
+              "guides/testing"
+            ]
+          },
+          {
+            "group": "Architecture",
+            "pages": [
+              "architecture/overview",
+              "architecture/project-structure",
+              "architecture/components"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "API Routes",
             "pages": [
-              "api-reference/introduction"
+              "api-reference/chat",
+              "api-reference/rate-limiting"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Server Actions",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api-reference/actions/voice",
+              "api-reference/actions/vision",
+              "api-reference/actions/files",
+              "api-reference/actions/authentication"
+            ]
+          },
+          {
+            "group": "Services",
+            "pages": [
+              "api-reference/services/chat-service",
+              "api-reference/services/backend-api",
+              "api-reference/services/ai-services"
+            ]
+          },
+          {
+            "group": "AI Tools",
+            "pages": [
+              "api-reference/tools/chat-tools",
+              "api-reference/tools/schemas"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Components",
+        "groups": [
+          {
+            "group": "Chat Components",
+            "pages": [
+              "components/chat/chat",
+              "components/chat/message",
+              "components/chat/input"
+            ]
+          },
+          {
+            "group": "Voice Components",
+            "pages": [
+              "components/voice/voice-button",
+              "components/voice/command-mode",
+              "components/voice/audio-waveform"
+            ]
+          },
+          {
+            "group": "AI Elements",
+            "pages": [
+              "components/ai-elements/generative-tables",
+              "components/ai-elements/tool-cards"
+            ]
+          },
+          {
+            "group": "Hooks",
+            "pages": [
+              "components/hooks/use-chat",
+              "components/hooks/use-voice",
+              "components/hooks/use-file-submission"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

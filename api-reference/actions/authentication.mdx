@@ -1,0 +1,308 @@
+---
+title: 'Authentication Actions'
+description: 'Server actions for authentication and session management'
+---
+
+## Overview
+
+The Authentication Actions module provides server-side functions for handling user authentication with a Laravel Sanctum backend. It manages secure token storage using HTTP-only cookies.
+
+<Warning>
+  The current implementation includes hardcoded credentials for development/testing purposes. This should be replaced with proper authentication flows in production.
+</Warning>
+
+## loginSilent
+
+Performs an automatic login using predefined credentials. Retrieves a Sanctum authentication token and stores it in an HTTP-only cookie.
+
+```typescript
+export async function loginSilent(): Promise<string | null>
+```
+
+### Response
+
+<ResponseField name="return" type="string | null">
+  Returns the authentication token on success, or `null` on failure
+</ResponseField>
+
+### Features
+
+- **HTTP-Only Cookies**: Stores token securely, inaccessible to JavaScript
+- **TLS Bypass**: Disables certificate validation in development for self-signed certificates
+- **Automatic Configuration**: Reads backend URL from environment variables
+- **Session Management**: Configures cookie with 7-day expiration
+
+### Cookie Configuration
+
+| Property | Value | Description |
+|----------|-------|-------------|
+| Name | `auth_token` | Cookie name |
+| HttpOnly | `true` | Prevents XSS access |
+| Secure | `true` (production) | HTTPS-only in production |
+| SameSite | `lax` | CSRF protection |
+| Path | `/` | Available site-wide |
+| MaxAge | 604800 seconds | 7 days |
+
+### Example
+
+```typescript
+const token = await loginSilent();
+
+if (token) {
+  console.log('[Auth] Login successful');
+  // Token is automatically stored in cookie
+  // Subsequent requests will include auth_token
+} else {
+  console.error('[Auth] Login failed');
+}
+```
+
+### API Endpoint
+
+Makes a POST request to:
+```
+{NEXT_PUBLIC_BACKEND_API_URL}/api/autenticacion/iniciar-sesion
+```
+
+### Request Body
+
+```json
+{
+  "email": "tecnico@test.com",
+  "password": "12345678"
+}
+```
+
+### Expected Backend Response
+
+```json
+{
+  "estado": "exito",
+  "data": {
+    "token": "1|abcdefghijklmnopqrstuvwxyz1234567890"
+  }
+}
+```
+
+---
+
+## getAuthToken
+
+Retrieves the stored authentication token from cookies.
+
+```typescript
+export async function getAuthToken(): Promise<string | undefined>
+```
+
+### Response
+
+<ResponseField name="return" type="string | undefined">
+  Returns the token value if present, or `undefined` if not found
+</ResponseField>
+
+### Example
+
+```typescript
+const token = await getAuthToken();
+
+if (token) {
+  // Use token for authenticated requests
+  const response = await fetch(`${backendUrl}/api/protected-route`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+} else {
+  // User not authenticated, redirect to login
+  console.log('No auth token found');
+}
+```
+
+### Use Cases
+
+1. **API Requests**: Include token in Authorization headers
+2. **Session Validation**: Check if user is authenticated
+3. **Middleware**: Verify authentication in Next.js middleware
+4. **Server Components**: Access auth state in React Server Components
+
+---
+
+## Configuration
+
+### Environment Variables
+
+<ParamField path="NEXT_PUBLIC_BACKEND_API_URL" type="string" default="https://gima-backend.test">
+  Base URL of the Laravel backend API
+</ParamField>
+
+<ParamField path="NODE_ENV" type="string">
+  Node environment. When set to `development`, disables TLS certificate validation
+</ParamField>
+
+### Development Mode
+
+In development (`NODE_ENV === 'development'`), the module automatically:
+- Disables TLS certificate validation (`NODE_TLS_REJECT_UNAUTHORIZED = '0'`)
+- Sets `secure: false` on cookies for HTTP testing
+- Enables verbose console logging
+
+<Warning>
+  TLS validation bypass should NEVER be used in production environments
+</Warning>
+
+---
+
+## Security Considerations
+
+### Current Implementation (Development)
+
+- ✅ HTTP-only cookies prevent XSS token theft
+- ✅ SameSite=lax provides CSRF protection
+- ⚠️ Hardcoded credentials (not for production)
+- ⚠️ TLS validation disabled in development
+
+### Production Recommendations
+
+<AccordionGroup>
+  <Accordion title="Replace Hardcoded Credentials">
+    Implement proper authentication flows:
+    ```typescript
+    export async function login(
+      email: string, 
+      password: string
+    ): Promise<string | null> {
+      const response = await fetch(`${backendUrl}/api/autenticacion/iniciar-sesion`, {
+        method: 'POST',
+        body: JSON.stringify({ email, password })
+      });
+      // ... handle response
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Enable TLS Validation">
+    Remove or conditionally disable the TLS bypass:
+    ```typescript
+    // Only for local development with self-signed certs
+    if (process.env.NODE_ENV === 'development' && 
+        process.env.ALLOW_SELF_SIGNED === 'true') {
+      process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Add Token Refresh">
+    Implement token refresh logic:
+    ```typescript
+    export async function refreshToken(): Promise<string | null> {
+      const currentToken = await getAuthToken();
+      if (!currentToken) return null;
+      
+      const response = await fetch(`${backendUrl}/api/refresh`, {
+        headers: { 'Authorization': `Bearer ${currentToken}` }
+      });
+      // ... handle refresh
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Add Logout Functionality">
+    ```typescript
+    export async function logout(): Promise<void> {
+      const token = await getAuthToken();
+      if (token) {
+        await fetch(`${backendUrl}/api/logout`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+      }
+      
+      // Clear cookie
+      const cookieStore = await cookies();
+      cookieStore.delete('auth_token');
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Integration Example
+
+Complete authentication flow:
+
+```typescript
+// app/api/auth/route.ts
+import { loginSilent, getAuthToken } from '@/app/actions/auth';
+
+export async function GET() {
+  const existingToken = await getAuthToken();
+  
+  if (existingToken) {
+    return Response.json({ authenticated: true });
+  }
+  
+  const token = await loginSilent();
+  
+  if (token) {
+    return Response.json({ authenticated: true, token });
+  }
+  
+  return Response.json({ authenticated: false }, { status: 401 });
+}
+```
+
+```typescript
+// app/components/ProtectedComponent.tsx
+import { getAuthToken } from '@/app/actions/auth';
+
+export default async function ProtectedComponent() {
+  const token = await getAuthToken();
+  
+  if (!token) {
+    redirect('/login');
+  }
+  
+  // Fetch protected data
+  const data = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_API_URL}/api/data`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  
+  return <div>{/* Render protected content */}</div>;
+}
+```
+
+---
+
+## Error Handling
+
+The `loginSilent` function handles errors gracefully:
+
+### HTTP Errors
+```typescript
+if (!response.ok) {
+  const errorText = await response.text();
+  console.error(`[Auth] Error de login (${response.status}):`, errorText);
+  return null;
+}
+```
+
+### Network Errors
+```typescript
+try {
+  // ... authentication logic
+} catch (error) {
+  console.error('[Auth] Excepción en loginSilent:', error);
+  return null;
+}
+```
+
+### Response Validation
+```typescript
+if (data.estado === 'exito' && data.data?.token) {
+  // Success
+} else {
+  console.error('[Auth] Respuesta de login inesperada:', data);
+  return null;
+}
+```

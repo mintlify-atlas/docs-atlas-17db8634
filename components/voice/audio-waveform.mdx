@@ -1,0 +1,367 @@
+---
+title: 'AudioWaveform'
+description: 'Animated audio waveform visualization for voice recording feedback'
+icon: 'waveform-lines'
+---
+
+## Overview
+
+The `AudioWaveform` component provides a visual representation of audio activity through animated bars. It creates a simple but effective waveform animation to indicate when audio is being recorded or processed.
+
+## Features
+
+- **Animated Bars**: Five animated bars with staggered timing for natural wave effect
+- **Active State**: Smooth transition between active and inactive states
+- **Lightweight**: Minimal DOM elements and CSS animations
+- **Customizable**: Supports custom styling via className prop
+- **Theme Compatible**: Works with light and dark themes using `bg-current`
+
+## Props
+
+<ParamField path="active" type="boolean" default="false">
+  Controls whether the waveform animation is active. When `true`, bars animate with wave motion. When `false`, bars shrink to minimal height.
+</ParamField>
+
+<ParamField path="className" type="string">
+  Additional CSS classes for custom styling of the container element
+</ParamField>
+
+## Usage Examples
+
+### Basic Usage
+
+```tsx
+import { AudioWaveform } from '@/app/components/features/voice/audio-waveform';
+
+function VoiceRecorder() {
+  const [isRecording, setIsRecording] = useState(false);
+
+  return (
+    <div className="flex items-center gap-2">
+      <AudioWaveform active={isRecording} />
+      <span>{isRecording ? 'Recording...' : 'Idle'}</span>
+    </div>
+  );
+}
+```
+
+### With Custom Styling
+
+```tsx
+<AudioWaveform
+  active={isActive}
+  className="text-blue-600 dark:text-blue-400"
+/>
+```
+
+### In Button Component
+
+```tsx
+function RecordButton({ isRecording }) {
+  return (
+    <button className="flex items-center gap-2 px-4 py-2 rounded-lg">
+      <AudioWaveform active={isRecording} />
+      {isRecording ? 'Stop' : 'Start'} Recording
+    </button>
+  );
+}
+```
+
+### In Status Badge
+
+```tsx
+<div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-full">
+  <AudioWaveform active={true} className="text-blue-600" />
+  <span className="text-xs">Listening...</span>
+</div>
+```
+
+## Animation Details
+
+### Active State
+
+When `active={true}`:
+- Each bar animates vertically using the `animate-music-bar` animation
+- Staggered delays create a wave effect (0.1s, 0.2s, 0.3s, 0.4s, 0.5s)
+- Bars vary in height naturally during animation
+- Full opacity for clear visibility
+
+### Inactive State
+
+When `active={false}`:
+- Bars shrink to 4px height
+- Opacity reduced to 20%
+- Smooth 300ms transition between states
+
+### CSS Animation
+
+The component relies on a CSS keyframe animation defined in your global styles:
+
+```css
+@keyframes music-bar {
+  0%, 100% {
+    height: 4px;
+  }
+  50% {
+    height: 16px;
+  }
+}
+
+.animate-music-bar {
+  animation: music-bar 0.8s ease-in-out infinite;
+}
+```
+
+## Visual Structure
+
+<CodeGroup>
+```tsx Component Structure
+<div className="flex items-center gap-0.5 h-4">
+  <div /> {/* Bar 1 */}
+  <div /> {/* Bar 2 */}
+  <div /> {/* Bar 3 */}
+  <div /> {/* Bar 4 */}
+  <div /> {/* Bar 5 */}
+</div>
+```
+
+```tsx Individual Bar
+<div
+  className="w-1 rounded-full bg-current transition-all duration-300"
+  style={{
+    height: active ? undefined : '4px',
+    animationDelay: `${i * 0.1}s`,
+  }}
+/>
+```
+</CodeGroup>
+
+## Styling
+
+### Color Customization
+
+The component uses `bg-current` which inherits the text color from its parent:
+
+```tsx
+{/* Blue waveform */}
+<div className="text-blue-600">
+  <AudioWaveform active={true} />
+</div>
+
+{/* Red waveform */}
+<div className="text-red-600">
+  <AudioWaveform active={true} />
+</div>
+
+{/* Custom color via className */}
+<AudioWaveform
+  active={true}
+  className="text-green-500"
+/>
+```
+
+### Size Customization
+
+```tsx
+{/* Larger waveform */}
+<AudioWaveform
+  active={true}
+  className="h-6 scale-150"
+/>
+
+{/* Smaller waveform */}
+<AudioWaveform
+  active={true}
+  className="h-3 scale-75"
+/>
+```
+
+## Integration with VoiceButton
+
+The AudioWaveform is integrated into the VoiceButton component at `voice-button.tsx:100`:
+
+```tsx
+{isListening && (
+  <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-950/50 rounded-full text-blue-600 dark:text-blue-400 text-xs font-medium animate-in fade-in slide-in-from-right-4 duration-300">
+    <AudioWaveform active={true} />
+    <span>
+      {mode === 'gemini' ? 'IA Escuchando...' : 'Grabando...'}
+    </span>
+  </div>
+)}
+```
+
+## Configuration
+
+The waveform dimensions are configured in `constants.ts`:
+
+```typescript
+export const VOICE_CONFIG = {
+  waveform: {
+    height: 16,  // Maximum height in pixels
+    bars: 4,     // Number of bars (component uses 5)
+  },
+} as const;
+```
+
+## Accessibility
+
+The AudioWaveform is purely decorative:
+
+<Warning>
+  This component provides visual feedback only. Always pair it with text labels or ARIA announcements for screen reader users.
+</Warning>
+
+### Good Example
+
+```tsx
+<div role="status" aria-live="polite">
+  <AudioWaveform active={isRecording} />
+  <span className="sr-only">
+    {isRecording ? 'Recording audio' : 'Not recording'}
+  </span>
+</div>
+```
+
+### Bad Example
+
+```tsx
+{/* No text alternative for screen readers */}
+<AudioWaveform active={isRecording} />
+```
+
+## Performance
+
+- **Lightweight**: Only 5 DOM elements
+- **CSS Animations**: Uses GPU-accelerated CSS animations
+- **No JavaScript Animation**: Pure CSS for smooth 60fps animation
+- **Conditional Rendering**: Can be conditionally rendered to save resources
+
+## Browser Support
+
+The component uses:
+- CSS `animation` (widely supported)
+- Flexbox layout (all modern browsers)
+- `bg-current` color (CSS Variables)
+
+Works in all modern browsers. Gracefully degrades in older browsers (shows static bars).
+
+## Variants
+
+### Pulse Style
+
+```tsx
+function PulseWaveform({ active }) {
+  return (
+    <div className="flex items-center gap-0.5 h-4">
+      {[1, 2, 3].map((i) => (
+        <div
+          key={i}
+          className={cn(
+            'w-2 h-2 rounded-full bg-current',
+            active && 'animate-pulse'
+          )}
+          style={{ animationDelay: `${i * 0.2}s` }}
+        />
+      ))}
+    </div>
+  );
+}
+```
+
+### Horizontal Style
+
+```tsx
+function HorizontalWaveform({ active }) {
+  return (
+    <div className="flex gap-0.5 w-16">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <div
+          key={i}
+          className={cn(
+            'h-1 rounded-full bg-current transition-all',
+            active ? 'w-4 animate-pulse' : 'w-1'
+          )}
+        />
+      ))}
+    </div>
+  );
+}
+```
+
+## Examples by Use Case
+
+<Tabs>
+  <Tab title="Voice Recording">
+    ```tsx
+    function VoiceRecorder() {
+      const [isRecording, setIsRecording] = useState(false);
+
+      return (
+        <button
+          onClick={() => setIsRecording(!isRecording)}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg"
+        >
+          <AudioWaveform active={isRecording} />
+          {isRecording ? 'Stop' : 'Start'}
+        </button>
+      );
+    }
+    ```
+  </Tab>
+
+  <Tab title="Status Indicator">
+    ```tsx
+    function StatusBadge({ isActive, label }) {
+      return (
+        <div className="inline-flex items-center gap-2 px-3 py-1 bg-gray-100 rounded-full text-sm">
+          <AudioWaveform active={isActive} className="text-blue-600" />
+          <span>{label}</span>
+        </div>
+      );
+    }
+    ```
+  </Tab>
+
+  <Tab title="Processing Indicator">
+    ```tsx
+    function ProcessingState({ isProcessing }) {
+      if (!isProcessing) return null;
+
+      return (
+        <div className="flex items-center gap-2 text-amber-600">
+          <AudioWaveform active={true} />
+          <span>Processing audio...</span>
+        </div>
+      );
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Source Reference
+
+Component implementation: `app/components/features/voice/audio-waveform.tsx:17`
+
+Constant configuration: `app/components/features/voice/constants.ts:29`
+
+## Related Components
+
+<CardGroup cols={2}>
+  <Card title="VoiceButton" icon="microphone" href="/components/voice/voice-button">
+    Uses AudioWaveform for recording feedback
+  </Card>
+  <Card title="VoiceCommandMode" icon="command" href="/components/voice/command-mode">
+    Full voice command workflow
+  </Card>
+</CardGroup>
+
+## Tips
+
+<Tip>
+  For best visual effect, use AudioWaveform in contexts with sufficient contrast between the waveform color and background.
+</Tip>
+
+<Tip>
+  The waveform animation is optimized for 16px height. If you need larger waveforms, consider scaling the entire component rather than changing individual bar heights.
+</Tip>

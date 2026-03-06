@@ -1,0 +1,244 @@
+---
+title: Configuration
+description: Complete guide to configuring the Gima AI Chatbot with environment variables, feature flags, and advanced settings
+---
+
+## Overview
+
+The Gima AI Chatbot uses environment variables for configuration, with validation powered by [Zod](https://zod.dev/) to ensure type-safety and fail-fast behavior if critical configuration is missing.
+
+All environment variables are validated at startup in `app/config/env.ts:51`.
+
+## Environment File Setup
+
+### Creating Your Configuration
+
+1. Copy the example environment file:
+   ```bash
+   cp .env.example .env.local
+   ```
+
+2. Update the values with your actual API keys and settings
+
+3. **Never commit `.env.local` to version control**
+
+<Warning>
+The `.env.local` file contains sensitive API keys. Make sure it's listed in your `.gitignore`.
+</Warning>
+
+## Required Configuration
+
+### API Keys
+
+#### GROQ API Key
+
+**Required for**: Text generation, chat responses, AI tools
+
+```bash
+GROQ_API_KEY=gsk_your_api_key_here
+```
+
+- **Format**: Must start with `gsk_`
+- **Obtain from**: [https://console.groq.com/keys](https://console.groq.com/keys)
+- **Validation**: Checked at `app/config/env.ts:12-18`
+
+<Tip>
+If you see the error "GROQ_API_KEY must start with 'gsk_'", verify your API key format.
+</Tip>
+
+#### Google Generative AI API Key
+
+**Required for**: Voice transcription, image analysis, PDF processing
+
+```bash
+GOOGLE_GENERATIVE_AI_API_KEY=AIzaYourAPIKeyHere
+```
+
+- **Format**: Must start with `AIza`
+- **Obtain from**: [https://makersuite.google.com/app/apikey](https://makersuite.google.com/app/apikey)
+- **Validation**: Checked at `app/config/env.ts:19-25`
+
+## Optional Configuration
+
+### Application URL
+
+```bash
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+```
+
+- **Default**: Not set (optional)
+- **Used for**: Absolute URLs, redirects, metadata
+- **Production example**: `https://your-domain.com`
+- **Development example**: `http://localhost:3000`
+
+<Info>
+The `NEXT_PUBLIC_` prefix makes this variable accessible on the client side.
+</Info>
+
+### Node Environment
+
+```bash
+NODE_ENV=development
+```
+
+- **Allowed values**: `development`, `production`, `test`
+- **Default**: `development`
+- **Validation**: Enforced by Zod enum at `app/config/env.ts:28`
+
+## Feature Flags
+
+### Chat Persistence
+
+```bash
+NEXT_PUBLIC_ENABLE_CHAT_PERSISTENCE=false
+```
+
+- **Default**: `false`
+- **Purpose**: Enables local storage of chat messages in the browser
+- **Storage location**: Browser localStorage
+- **Limit**: Up to 100 messages (see `app/config/limits.ts:94`)
+
+### Voice Commands
+
+```bash
+NEXT_PUBLIC_FEATURE_VOICE_COMMANDS=false
+```
+
+- **Default**: `false`
+- **Purpose**: Enables voice-activated work order creation
+- **Requirements**: Google Generative AI API key must be configured
+
+### PDF Reader & Analysis
+
+```bash
+NEXT_PUBLIC_FEATURE_PDF_READER=false
+```
+
+- **Default**: `false`
+- **Purpose**: Enables PDF document upload and AI analysis
+- **Max file size**: 10MB (see `app/config/limits.ts:59`)
+- **Requirements**: Google Generative AI API key must be configured
+
+## Backend Integration
+
+### Backend API URL
+
+```bash
+NEXT_PUBLIC_BACKEND_API_URL=https://api.your-domain.com
+```
+
+- **Format**: Must be a valid URL
+- **Purpose**: Base URL for Laravel backend API (GIMA)
+- **Validation**: URL format checked at `app/config/env.ts:31`
+- **Used by**: `BackendAPIService` (see `app/lib/services/backend-api-service.ts:300`)
+
+### Backend API Key
+
+```bash
+BACKEND_API_KEY=your_backend_api_key
+```
+
+- **Purpose**: Authentication key for backend API requests
+- **Optional**: Can be empty if using other auth methods
+
+### Demo Mode
+
+```bash
+NEXT_PUBLIC_DEMO_MODE=false
+```
+
+- **Default**: `false`
+- **Purpose**: Enables demo mode with mock data (no real backend required)
+- **Transform**: String "true"/"false" converted to boolean
+
+## Configuration Limits
+
+The application enforces various size limits for uploads and messages:
+
+### File Upload Limits
+
+| Type | Max Size | Configuration |
+|------|----------|---------------|
+| Audio files | 5MB | `MAX_AUDIO_SIZE_BYTES` |
+| Images | 5MB | `MAX_IMAGE_SIZE_BYTES` |
+| PDF documents | 10MB | `MAX_PDF_SIZE_BYTES` |
+| Server actions | 5MB | `SERVER_ACTION_BODY_SIZE_BYTES` |
+
+**Source**: `app/config/limits.ts`
+
+### Message Limits
+
+- **Max message text size**: 10KB (~5000 words)
+- **Max stored messages**: 100 messages in localStorage
+
+## Environment Validation
+
+The application uses Zod for runtime validation of environment variables:
+
+```typescript
+// app/config/env.ts
+export const env = envSchema.parse(process.env);
+```
+
+If validation fails, the application will throw an error at startup with details about which variable is invalid.
+
+### Common Validation Errors
+
+<AccordionGroup>
+  <Accordion title="GROQ_API_KEY must start with 'gsk_'">
+    **Solution**: Verify your GROQ API key begins with the correct prefix. Get a new key from [console.groq.com](https://console.groq.com/keys) if needed.
+  </Accordion>
+
+  <Accordion title="Google API Key must start with 'AIza'">
+    **Solution**: Verify your Google API key begins with the correct prefix. Get a new key from [Google AI Studio](https://makersuite.google.com/app/apikey).
+  </Accordion>
+
+  <Accordion title="Invalid NODE_ENV">
+    **Solution**: Use only `development`, `production`, or `test`. Remove any custom environment names.
+  </Accordion>
+</AccordionGroup>
+
+## TypeScript Types
+
+All environment variables are fully typed:
+
+```typescript
+import { env } from '@/app/config/env';
+import type { Env } from '@/app/config/env';
+
+// Usage example
+const apiKey = env.GROQ_API_KEY; // Type: string
+const nodeEnv = env.NODE_ENV; // Type: 'development' | 'production' | 'test'
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use .env.local" icon="lock">
+    Always store secrets in `.env.local`, never in `.env` or committed files.
+  </Card>
+  
+  <Card title="Validate Early" icon="shield-check">
+    The app validates all config at startup - fix issues before deployment.
+  </Card>
+  
+  <Card title="Separate Environments" icon="layer-group">
+    Use different API keys for development and production environments.
+  </Card>
+  
+  <Card title="Monitor Limits" icon="gauge-high">
+    Be aware of file size limits when enabling PDF and image features.
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="AI Models" href="/guides/ai-models" icon="brain">
+    Learn about available AI models and how to configure them
+  </Card>
+  
+  <Card title="Backend Integration" href="/guides/backend-integration" icon="plug">
+    Set up the Laravel backend API integration
+  </Card>
+</CardGroup>

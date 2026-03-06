@@ -1,0 +1,655 @@
+---
+title: 'Chat Tools'
+description: 'AI-powered tools for querying backend data and generating maintenance content'
+icon: 'robot'
+---
+
+## Overview
+
+The chat tools module provides a set of AI-powered functions that enable the GIMA chatbot to:
+- Query backend APIs for assets, maintenance records, inventory, and reports
+- Generate maintenance checklists using AI
+- Create professional activity summaries
+- Create work orders through conversational interface
+
+All tools are defined in `app/lib/ai/tools/chat-tools.ts` and use the Vercel AI SDK's `tool()` function.
+
+## Constants
+
+### MAX_ITEMS_PER_RESPONSE
+
+```typescript
+const MAX_ITEMS_PER_RESPONSE = 15;
+```
+
+Maximum number of items returned per tool response to prevent token-per-minute (TPM) limit errors with models like `llama-3.1-8b-instant` (6000 TPM).
+
+### MAX_DESCRIPTION_LENGTH
+
+```typescript
+const MAX_DESCRIPTION_LENGTH = 120;
+```
+
+Maximum character length for description fields in responses to avoid context saturation.
+
+## Asset Catalog Tools
+
+### consultar_activos
+
+Queries and searches registered assets by name, code, status, or location.
+
+**Description:** "Consulta, lista o busca activos/equipos registrados por nombre, código, estado o ubicación."
+
+#### Parameters
+
+<ParamField path="estado" type="enum" optional>
+  Asset status: `operativo`, `mantenimiento`, `fuera_servicio`, `baja`
+</ParamField>
+
+<ParamField path="buscar" type="string" optional>
+  Search term for asset name or code
+</ParamField>
+
+<ParamField path="tipo" type="string" optional>
+  Asset type in free text (e.g., "bomba", "compresor", "mobiliario")
+</ParamField>
+
+<ParamField path="page" type="number | string" default="1">
+  Page number for pagination
+</ParamField>
+
+#### Returns
+
+```typescript
+{
+  success: true,
+  data: {
+    items: Array<{
+      id: number;
+      codigo: string;
+      estado: string;
+      valor: number;
+      articulo: {
+        tipo: string;
+        descripcion: string; // Truncated to 120 chars
+        modelo: string;
+        marca: string;
+      };
+      ubicacion: {
+        edificio: string;
+        piso: string;
+        salon: string;
+      };
+    }>,
+    pagination: {
+      page: number;
+      perPage: number;
+      total: number;
+      lastPage: number;
+    },
+    note?: string; // Present if results are truncated
+  },
+  summary: string;
+}
+```
+
+#### Example
+
+```typescript
+await chatTools.consultar_activos.execute({
+  estado: 'operativo',
+  tipo: 'bomba',
+  page: 1
+});
+```
+
+## Maintenance Tools
+
+### consultar_mantenimientos
+
+Queries maintenance orders by status, type, and priority.
+
+**Description:** "Consulta órdenes de mantenimiento. Úsala cuando pregunten por mantenimientos pendientes, en progreso, historial o por tipo."
+
+#### Parameters
+
+<ParamField path="estado" type="enum" optional>
+  Order status: `pendiente`, `en_progreso`, `completado`, `cancelado`
+</ParamField>
+
+<ParamField path="tipo" type="enum" optional>
+  Maintenance type: `preventivo`, `correctivo`, `predictivo`
+</ParamField>
+
+<ParamField path="prioridad" type="enum" optional>
+  Priority level: `baja`, `media`, `alta`
+</ParamField>
+
+<ParamField path="page" type="number | string" default="1">
+  Page number for pagination
+</ParamField>
+
+#### Returns
+
+```typescript
+{
+  success: true,
+  data: {
+    items: Array<{
+      id: number;
+      estado: string;
+      tipo: string;
+      fecha_apertura: string;
+      fecha_cierre: string | null;
+      costo_total: number;
+      validado: boolean;
+      reporte: {
+        prioridad: string;
+        descripcion: string; // Truncated
+      };
+      activo: {
+        codigo: string;
+        articulo: {
+          descripcion: string; // Truncated
+        };
+      };
+    }>,
+    pagination: PaginationInfo,
+    note?: string;
+  },
+  summary: string;
+}
+```
+
+### consultar_calendario
+
+Queries scheduled maintenance calendar entries.
+
+**Description:** "Consulta el calendario de mantenimientos programados, próximos o agenda."
+
+#### Parameters
+
+<ParamField path="page" type="number | string" default="1">
+  Page number for pagination
+</ParamField>
+
+#### Returns
+
+```typescript
+{
+  success: true,
+  data: {
+    items: Array<{
+      id: number;
+      fecha_programada: string;
+      estado: string;
+      tipo: string;
+      activo: {
+        codigo: string;
+        articulo: {
+          descripcion: string;
+        };
+      };
+    }>,
+    pagination: PaginationInfo;
+  },
+  summary: string;
+}
+```
+
+### consultar_reportes
+
+Queries maintenance reports, failures, incidents, or registered problems.
+
+**Description:** "Consulta reportes de mantenimiento, fallos, incidencias o problemas registrados."
+
+#### Parameters
+
+<ParamField path="prioridad" type="enum" optional>
+  Report priority: `baja`, `media`, `alta`
+</ParamField>
+
+<ParamField path="estado" type="enum" optional>
+  Report status: `abierto`, `asignado`, `en_progreso`, `resuelto`, `cerrado`
+</ParamField>
+
+<ParamField path="page" type="number | string" default="1">
+  Page number for pagination
+</ParamField>
+
+#### Returns
+
+```typescript
+{
+  success: true,
+  data: {
+    items: Array<{
+      id: number;
+      descripcion: string; // Truncated
+      estado: string;
+      prioridad: string;
+      created_at: string;
+      activo?: {
+        codigo: string;
+        articulo: {
+          descripcion: string;
+        };
+      };
+    }>,
+    pagination: PaginationInfo;
+  },
+  summary: string;
+}
+```
+
+## Inventory Tools
+
+### consultar_inventario
+
+Searches spare parts in inventory by name or available stock.
+
+**Description:** "Busca repuestos en el inventario por nombre o stock disponible. Para bajo stock usa bajo_stock:true."
+
+#### Parameters
+
+<ParamField path="buscar" type="string" optional>
+  Search term for spare part name
+</ParamField>
+
+<ParamField path="bajo_stock" type="boolean" optional>
+  Filter for low stock items
+</ParamField>
+
+<ParamField path="page" type="number | string" default="1">
+  Page number for pagination
+</ParamField>
+
+#### Returns
+
+```typescript
+{
+  success: true,
+  data: {
+    items: Array<{
+      id: number;
+      nombre: string;
+      codigo: string;
+      descripcion: string; // Truncated
+      stock: number;
+      stock_minimo: number;
+      costo: number;
+    }>,
+    pagination: PaginationInfo;
+  },
+  summary: string;
+}
+```
+
+### consultar_proveedores
+
+Lists registered suppliers and their supply contacts.
+
+**Description:** "Lista los proveedores registrados y sus contactos de suministro."
+
+#### Parameters
+
+No parameters required.
+
+#### Returns
+
+```typescript
+{
+  success: true,
+  data: {
+    items: Array<{
+      id: number;
+      nombre: string;
+      contacto: string;
+      telefono: string;
+      email: string;
+      repuestos_count: number;
+    }>,
+    pagination: PaginationInfo;
+  },
+  summary: string;
+}
+```
+
+## AI Generation Tools
+
+### generar_checklist
+
+Generates an AI-powered maintenance checklist for an asset and task type.
+
+**Description:** "Genera un checklist de mantenimiento con IA para un activo y tipo de tarea."
+
+#### Parameters
+
+<ParamField path="assetType" type="enum" optional>
+  Asset type. Accepts canonical values or aliases:
+  
+  **Canonical values:** `unidad-hvac`, `caldera`, `bomba`, `compresor`, `generador`, `panel-electrico`, `transportador`, `grua`, `montacargas`, `otro`
+  
+  **Aliases:** `hvac`, `ac`, `electrico`, `split`, `boiler`, `pump`, etc.
+  
+  Defaults to `otro` if not provided or invalid.
+</ParamField>
+
+<ParamField path="taskType" type="enum" default="preventivo">
+  Maintenance task type: `preventivo`, `correctivo`, `predictivo`
+</ParamField>
+
+<ParamField path="customInstructions" type="string" optional>
+  Custom instructions for checklist generation
+</ParamField>
+
+#### Returns
+
+```typescript
+{
+  success: true,
+  checklist: {
+    id: string;
+    title: string;
+    description: string;
+    assetType: string;
+    taskType: string;
+    items: Array<{
+      id: string;
+      description: string;
+      category: string;
+      order: number;
+      required: boolean;
+      notes?: string;
+    }>;
+    createdAt: Date;
+    isTemplate: boolean;
+  },
+  cached: boolean,
+  summary: string;
+}
+```
+
+#### Asset Type Normalization
+
+The tool automatically normalizes asset type aliases to canonical values:
+
+```typescript
+// HVAC variations
+"hvac" → "unidad-hvac"
+"ac" → "unidad-hvac"
+"aire acondicionado" → "unidad-hvac"
+"split" → "unidad-hvac"
+
+// Electrical
+"electrico" → "panel-electrico"
+"tablero" → "panel-electrico"
+
+// Equipment
+"pump" → "bomba"
+"boiler" → "caldera"
+"forklift" → "montacargas"
+```
+
+See `chat-tools.ts:83-120` for the complete alias mapping.
+
+#### Example
+
+```typescript
+await chatTools.generar_checklist.execute({
+  assetType: 'hvac', // Normalized to 'unidad-hvac'
+  taskType: 'preventivo',
+  customInstructions: 'Enfoque en limpieza de filtros'
+});
+```
+
+### generar_resumen_actividad
+
+Generates a professional AI-powered summary of activity notes.
+
+**Description:** "Genera un resumen profesional de notas de actividad con IA. Úsala para resumir actividades técnicas o crear informes de trabajo."
+
+#### Parameters
+
+<ParamField path="activities" type="string" required>
+  Activity notes to summarize. Minimum 1 character (normalized internally).
+  
+  Short inputs (< 10 chars) are automatically prefixed with "Actividad reportada:" to meet validation requirements.
+</ParamField>
+
+<ParamField path="assetType" type="enum" optional>
+  Asset type (same as `generar_checklist`). Defaults to `otro`.
+</ParamField>
+
+<ParamField path="taskType" type="enum" default="preventivo">
+  Task type: `preventivo`, `correctivo`, `predictivo`
+</ParamField>
+
+<ParamField path="style" type="enum" default="tecnico">
+  Summary style: `ejecutivo`, `tecnico`, `narrativo`
+  
+  Accepts English aliases: `formal` → `ejecutivo`, `technical` → `tecnico`, `brief` → `narrativo`
+</ParamField>
+
+<ParamField path="detailLevel" type="enum" default="medio">
+  Detail level: `alto`, `medio`, `bajo`
+  
+  Accepts English aliases: `high` → `alto`, `medium` → `medio`, `low` → `bajo`
+</ParamField>
+
+#### Returns
+
+```typescript
+{
+  success: true,
+  summary: {
+    id: string;
+    title: string;
+    executive: string;
+    sections: Array<{
+      title: string;
+      content: string;
+      order: number;
+    }>;
+    assetType: string;
+    taskType: string;
+    style: string;
+    detailLevel: string;
+    createdAt: Date;
+  },
+  cached: boolean;
+}
+```
+
+#### Example
+
+```typescript
+await chatTools.generar_resumen_actividad.execute({
+  activities: 'Revisión de bomba centrífuga. Se encontró desgaste en rodamientos. Se reemplazó componente.',
+  assetType: 'bomba',
+  taskType: 'correctivo',
+  style: 'ejecutivo',
+  detailLevel: 'medio'
+});
+```
+
+## Action Tools
+
+### crear_orden_trabajo
+
+Creates a work order in GIMA (client-side tool).
+
+**Description:** "Crea una orden de trabajo en GIMA. SOLO cuando el usuario lo pida explícitamente."
+
+<Note>
+  This is a **client-side tool** without an `execute` function. The client renders an `OrderApprovalCard` component to confirm the order before submission.
+</Note>
+
+#### Parameters
+
+<ParamField path="equipment" type="string" default="Sin especificar">
+  Equipment identifier or description
+</ParamField>
+
+<ParamField path="description" type="string" default="">
+  Work order description (max 500 characters, auto-truncated)
+</ParamField>
+
+<ParamField path="priority" type="enum" default="media">
+  Priority level: `baja`, `media`, `alta`
+</ParamField>
+
+<ParamField path="location_text" type="string" optional>
+  Location name in free text format (NOT a numeric ID)
+</ParamField>
+
+## Error Handling
+
+All tools use the `safeExecute()` wrapper that provides consistent error handling:
+
+### Error Response Format
+
+```typescript
+type ToolErrorResult = {
+  success: false;
+  error: string;
+  suggestion?: string;
+};
+```
+
+### Error Types
+
+<ResponseField name="BackendAuthError" type="authentication">
+  User authentication failed. Suggests reloading and logging in again.
+  
+  ```json
+  {
+    "success": false,
+    "error": "No se pudo autenticar. Inicia sesión nuevamente.",
+    "suggestion": "Recarga la página e inicia sesión."
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="BackendTimeoutError" type="timeout">
+  Backend service took too long to respond.
+  
+  ```json
+  {
+    "success": false,
+    "error": "El servicio tardó demasiado en responder. Intenta de nuevo.",
+    "suggestion": "Intenta con filtros más específicos."
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="BackendAPIError" type="server">
+  Backend API returned an error.
+  
+  ```json
+  {
+    "success": false,
+    "error": "Error del servidor: <message>",
+    "suggestion": "Verifica que el backend esté disponible."
+  }
+  ```
+</ResponseField>
+
+## Helper Functions
+
+### truncate()
+
+Truncates strings to the specified limit (default 120 characters) to reduce token usage.
+
+```typescript
+function truncate(
+  str: string | null | undefined,
+  limit = MAX_DESCRIPTION_LENGTH
+): string | undefined
+```
+
+### normalizeAssetType()
+
+Normalizes asset type variations to canonical values.
+
+```typescript
+function normalizeAssetType(val: unknown): unknown
+```
+
+Maps common aliases (e.g., "hvac", "ac", "electrico") to canonical enum values. See `chat-tools.ts:122-143`.
+
+### normalizePaginatedResponse()
+
+Normalizes Laravel paginated responses to a consistent format.
+
+```typescript
+function normalizePaginatedResponse(raw: unknown): {
+  items: unknown[];
+  pagination: {
+    page: number;
+    perPage: number;
+    total: number;
+    lastPage: number;
+  };
+}
+```
+
+Handles three Laravel pagination formats:
+1. API Resource Collection: `{ data[], links, meta }`
+2. Simple Paginator: `{ data[], current_page, total, ... }`
+3. Internal wrapper: `{ items[], pagination }`
+
+### safeEnum()
+
+Creates an optional Zod enum that silences invalid values instead of throwing errors.
+
+```typescript
+function safeEnum<T extends string>(
+  allowedValues: readonly [T, ...T[]]
+): ZodOptional<ZodString>
+```
+
+## Tool Usage Patterns
+
+### Single Call Rule
+
+All tool descriptions emphasize: **"Una sola llamada es suficiente; NO repitas esta tool en el mismo turno."**
+
+This prevents the AI from making redundant calls in multi-step scenarios.
+
+### Pagination Handling
+
+Tools return a `note` field when results are truncated:
+
+```typescript
+{
+  data: {
+    items: [...], // First 15 items
+    note: "Mostrando 15 de 100. Usa page o filtros para ver más."
+  }
+}
+```
+
+### Token Budget Management
+
+1. **Item limiting:** Max 15 items per response (`MAX_ITEMS_PER_RESPONSE`)
+2. **Description truncation:** Max 120 characters (`MAX_DESCRIPTION_LENGTH`)
+3. **Field filtering:** Only essential fields are returned
+
+## Configuration
+
+### TOOL_STOP_CONDITION
+
+```typescript
+export const TOOL_STOP_CONDITION = stepCountIs(4);
+```
+
+Limits tool execution to 4 steps to prevent infinite loops in multi-step tool calls.
+
+## Type Exports
+
+```typescript
+export type ChatTools = typeof chatTools;
+```
+
+Exports the complete type for all chat tools.

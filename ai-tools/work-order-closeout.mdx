@@ -1,0 +1,160 @@
+---
+title: "Work Order Closeout"
+description: "Generate professional closeout notes for completed work orders"
+icon: "clipboard-check"
+---
+
+Automatically generate comprehensive closeout notes for completed maintenance work orders.
+
+## Overview
+
+The Work Order Closeout tool creates professional documentation that:
+- Summarizes work performed
+- Lists materials and parts used
+- Documents time spent on each phase
+- Provides recommendations
+- Ensures compliance and record-keeping
+
+## Features
+
+<CardGroup cols={2}>
+  <Card title="Comprehensive" icon="file-check">
+    Complete documentation of all work performed
+  </Card>
+  <Card title="Professional" icon="briefcase">
+    Polished language suitable for management review
+  </Card>
+  <Card title="Structured" icon="list">
+    Organized sections for easy reference
+  </Card>
+  <Card title="Fast" icon="bolt">
+    Generate in seconds, not minutes
+  </Card>
+</CardGroup>
+
+## How to Use
+
+<Steps>
+  <Step title="Gather Work Order Data">
+    Collect information about the completed work:
+    - Work order number and description
+    - Equipment or asset involved
+    - Problems encountered
+    - Actions taken
+    - Parts and materials used
+    - Time spent
+  </Step>
+  <Step title="Generate Closeout Notes">
+    The AI creates structured documentation including:
+    - Executive summary
+    - Detailed work description
+    - Materials used
+    - Time breakdown
+    - Recommendations for future maintenance
+  </Step>
+  <Step title="Review and Finalize">
+    Review the generated notes and:
+    - Add any missing details
+    - Verify accuracy
+    - Adjust recommendations if needed
+  </Step>
+  <Step title="Submit">
+    Copy the closeout notes to your work order system
+  </Step>
+</Steps>
+
+## Example Output
+
+<Accordion title="View Example Closeout Notes">
+**Work Order Closeout Report**
+
+**Order #**: WO-2024-0156  
+**Equipment**: Bomba Centrífuga BCA-05  
+**Date**: March 6, 2024  
+**Status**: Completed
+
+**Summary**
+
+Successfully completed corrective maintenance on centrifugal pump BCA-05. The pump was experiencing unusual vibration and reduced flow. Root cause identified as worn impeller and misaligned motor coupling.
+
+**Work Performed**
+
+1. **Diagnosis**
+   - Vibration analysis conducted
+   - Flow rate measured and compared to baseline
+   - Visual inspection of pump internals
+
+2. **Repairs**
+   - Replaced impeller (Part# IMP-250-SS)
+   - Realigned motor coupling
+   - Balanced rotating assembly
+   - Replaced mechanical seal
+
+3. **Testing**
+   - Verified flow rate: 250 GPM (within spec)
+   - Vibration levels: 0.08 in/sec (acceptable)
+   - No leaks detected
+   - Temperature normal
+
+**Materials Used**
+- Impeller (IMP-250-SS) x1
+- Mechanical Seal (MS-2.5-EPDM) x1
+- Coupling alignment shims x1 set
+- Grease (High-temp bearing) x 200g
+
+**Time Breakdown**
+- Diagnosis: 1.5 hours
+- Disassembly: 2.0 hours
+- Repair: 3.0 hours
+- Reassembly: 1.5 hours
+- Testing: 1.0 hour
+- **Total**: 9.0 hours
+
+**Recommendations**
+- Monitor vibration levels weekly for next month
+- Schedule preventive maintenance in 6 months
+- Consider upgrade to higher-grade impeller material
+- Add flow meter for continuous monitoring
+
+**Technician Notes**
+
+Pump returned to normal operation. Customer notified. Equipment back in service.
+</Accordion>
+
+## Integration
+
+The Work Order Closeout tool can be integrated into your workflow:
+
+```typescript
+import { WorkOrderCloseoutAIService } from '@/app/lib/services/work-order-closeout-ai-service';
+
+const service = new WorkOrderCloseoutAIService();
+
+const closeout = await service.generateCloseoutNotes({
+  orderNumber: 'WO-2024-0156',
+  description: 'Corrective maintenance on pump BCA-05',
+  workPerformed: 'Replaced impeller, realigned coupling',
+  materialsUsed: 'Impeller IMP-250-SS, Mechanical seal MS-2.5-EPDM',
+  hoursSpent: 9.0
+});
+```
+
+## Technical Details
+
+Powered by:
+- **WorkOrderCloseoutAIService** (`app/lib/services/work-order-closeout-ai-service.ts`)
+- **GROQ LLaMA 3.3 70B** model
+- **Professional tone** optimized for management review
+
+See [AI Services API](/api-reference/services/ai-services) for implementation details.
+
+## Related Tools
+
+<CardGroup cols={2}>
+  <Card title="Activity Summaries" icon="file-lines" href="/ai-tools/activity-summaries">
+    Generate activity reports
+  </Card>
+  <Card title="Checklist Builder" icon="list-check" href="/ai-tools/checklist-builder">
+    Create maintenance checklists
+  </Card>
+</CardGroup>

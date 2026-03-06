@@ -1,0 +1,489 @@
+---
+title: Backend Integration
+description: Complete guide to integrating the Gima AI Chatbot with the Laravel backend API
+---
+
+## Overview
+
+The Gima AI Chatbot integrates with a Laravel backend (GIMA system) to query real maintenance data, assets, work orders, and inventory. The integration is handled by the `BackendAPIService` class.
+
+**Source**: `app/lib/services/backend-api-service.ts`
+
+## Architecture
+
+```
+┌─────────────────┐
+│  Next.js Chat   │
+│   (Frontend)    │
+└────────┬────────┘
+         │
+         │ Bearer Token
+         │
+         ▼
+┌─────────────────┐
+│ BackendAPIService│
+│  (HTTP Client)   │
+└────────┬────────┘
+         │
+         │ REST API
+         │
+         ▼
+┌─────────────────┐
+│  Laravel API    │
+│   (Backend)     │
+└─────────────────┘
+```
+
+## Configuration
+
+### Environment Variables
+
+Set the backend URL in your `.env.local`:
+
+```bash
+NEXT_PUBLIC_BACKEND_API_URL=https://api.your-domain.com
+```
+
+- **Validation**: Must be a valid URL (checked at `app/config/env.ts:31`)
+- **Required**: Yes (for production with real data)
+- **Used by**: `createBackendAPIService()` factory at `app/lib/services/backend-api-service.ts:300`
+
+<Info>
+If not configured, the service will throw a `BackendAPIError` when instantiated.
+</Info>
+
+## Authentication
+
+### Bearer Token Authentication
+
+The service uses **Laravel Sanctum** for authentication:
+
+```typescript
+const service = createBackendAPIService({
+  token: 'your-user-session-token'
+});
+```
+
+- **Method**: Bearer token in `Authorization` header
+- **Token injection**: Per-instance (not global)
+- **Token source**: Extracted from Next.js cookies in tool execute functions
+
+**Implementation**: `app/lib/services/backend-api-service.ts:135-143`
+
+### Authentication Errors
+
+If the backend returns `401 Unauthorized`:
+
+```typescript
+throw new BackendAuthError();
+// Message: "No se pudo autenticar con el backend. Verifica tu sesión."
+```
+
+**Source**: `app/lib/services/backend-api-service.ts:90-95`
+
+## Service Features
+
+### Automatic Pagination Unwrapping
+
+Laravel returns paginated data in `LengthAwarePaginator` format. The service automatically unwraps it:
+
+```typescript
+// Backend response
+{
+  "data": [...items],
+  "meta": { "current_page": 1, "total": 50 },
+  "links": { "next": "..." }
+}
+
+// Unwrapped result
+{
+  items: [...],
+  pagination: {
+    page: 1,
+    lastPage: 5,
+    perPage: 10,
+    total: 50,
+    hasMore: true
+  }
+}
+```
+
+**Implementation**: `app/lib/services/backend-api-service.ts:202-220`
+
+### Retry with Exponential Backoff
+
+Transient errors are automatically retried:
+
+- **Max retries**: 2 (3 total attempts)
+- **Backoff**: Exponential (1s, 2s)
+- **Retryable errors**: Timeouts, 5xx errors, 408, 429
+- **Non-retryable**: 4xx client errors (except 408, 429)
+
+**Implementation**: `app/lib/services/backend-api-service.ts:128-196`
+
+### Timeout Configuration
+
+```typescript
+const DEFAULT_TIMEOUT_MS = 8000; // 8 seconds
+```
+
+- **Default**: 8 seconds
+- **Reason**: Margin for Vercel Edge runtime limits
+- **Configurable**: Pass `timeoutMs` to constructor
+
+**Source**: `app/lib/services/backend-api-service.ts:60`
+
+If a request times out:
+
+```typescript
+throw new BackendTimeoutError(endpoint, timeoutMs);
+// Message: "El servidor tardó más de 8s en responder. 
+//           Intenta con filtros más específicos."
+```
+
+**Source**: `app/lib/services/backend-api-service.ts:79-88`
+
+## API Endpoints
+
+### Catalog
+
+#### Get Assets
+
+```typescript
+const result = await service.getActivos({
+  tipo?: 'mobiliario' | 'equipo',
+  estado?: string,
+  busqueda?: string,
+  page?: number
+});
+```
+
+- **Endpoint**: `/api/catalogo/activos`
+- **Alternate**: `/api/catalogo/activos/por-categoria` (when `tipo` is provided)
+- **Returns**: `PaginatedResult<Activo>`
+- **Schema**: `activoSchema` from `app/lib/schemas/backend-response.schema.ts`
+
+**Source**: `app/lib/services/backend-api-service.ts:240-249`
+
+### Maintenance
+
+#### Get Work Orders
+
+```typescript
+const result = await service.getMantenimientos({
+  estado?: 'pendiente' | 'en_progreso' | 'completado',
+  prioridad?: 'baja' | 'media' | 'alta',
+  activo_id?: number,
+  page?: number
+});
+```
+
+- **Endpoint**: `/api/mantenimiento/mantenimientos`
+- **Returns**: `PaginatedResult<Mantenimiento>`
+- **Schema**: `mantenimientoSchema`
+
+**Source**: `app/lib/services/backend-api-service.ts:255-260`
+
+#### Get Maintenance Calendar
+
+```typescript
+const result = await service.getCalendario({
+  fecha_desde?: string,  // ISO date
+  fecha_hasta?: string,  // ISO date
+  page?: number
+});
+```
+
+- **Endpoint**: `/api/mantenimiento/calendario`
+- **Returns**: `PaginatedResult<CalendarioMantenimiento>`
+- **Schema**: `calendarioSchema`
+
+**Source**: `app/lib/services/backend-api-service.ts:262-267`
+
+#### Get Reports
+
+```typescript
+const result = await service.getReportes({
+  tipo?: string,
+  fecha_desde?: string,
+  fecha_hasta?: string,
+  page?: number
+});
+```
+
+- **Endpoint**: `/api/mantenimiento/reportes`
+- **Returns**: `PaginatedResult<Reporte>`
+- **Schema**: `reporteSchema`
+
+**Source**: `app/lib/services/backend-api-service.ts:269-272`
+
+### Inventory
+
+#### Get Parts/Supplies
+
+```typescript
+const result = await service.getRepuestos({
+  bajo_stock?: boolean,
+  categoria?: string,
+  busqueda?: string,
+  page?: number
+});
+```
+
+- **Endpoint**: `/api/inventario/repuestos`
+- **Returns**: `PaginatedResult<Repuesto>`
+- **Schema**: `repuestoSchema`
+
+**Source**: `app/lib/services/backend-api-service.ts:278-281`
+
+#### Get Suppliers
+
+```typescript
+const result = await service.getProveedores();
+```
+
+- **Endpoint**: `/api/inventario/proveedores`
+- **Returns**: `PaginatedResult<Proveedor>`
+- **Schema**: `proveedorSchema`
+
+**Source**: `app/lib/services/backend-api-service.ts:283-285`
+
+## Error Handling
+
+### Custom Error Classes
+
+#### BackendAPIError
+
+```typescript
+try {
+  await service.getActivos();
+} catch (error) {
+  if (error instanceof BackendAPIError) {
+    console.log(error.message);    // Error description
+    console.log(error.statusCode); // HTTP status code
+    console.log(error.endpoint);   // Failed endpoint
+  }
+}
+```
+
+**Source**: `app/lib/services/backend-api-service.ts:68-77`
+
+#### BackendTimeoutError
+
+Extends `BackendAPIError` with timeout-specific messaging:
+
+```typescript
+if (error instanceof BackendTimeoutError) {
+  // statusCode: 408
+  // Suggests using more specific filters
+}
+```
+
+**Source**: `app/lib/services/backend-api-service.ts:79-88`
+
+#### BackendAuthError
+
+Extends `BackendAPIError` for authentication failures:
+
+```typescript
+if (error instanceof BackendAuthError) {
+  // statusCode: 401
+  // Suggests verifying session
+}
+```
+
+**Source**: `app/lib/services/backend-api-service.ts:90-95`
+
+### Error Flow
+
+```typescript
+try {
+  const result = await service.getActivos();
+} catch (error) {
+  if (error instanceof BackendAuthError) {
+    // Redirect to login
+  } else if (error instanceof BackendTimeoutError) {
+    // Suggest more specific filters
+  } else if (error instanceof BackendAPIError) {
+    // Show generic error message
+  } else {
+    // Network or unknown error
+  }
+}
+```
+
+## Usage Example
+
+### Creating Service Instance
+
+```typescript
+import { createBackendAPIService } from '@/app/lib/services/backend-api-service';
+import { cookies } from 'next/headers';
+
+// Inside a Server Action or API Route
+export async function fetchAssetsAction() {
+  // Extract token from cookies (Laravel Sanctum)
+  const cookieStore = await cookies();
+  const token = cookieStore.get('session_token')?.value;
+  
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+  
+  // Create service instance with token
+  const service = createBackendAPIService({ token });
+  
+  // Query backend
+  const assets = await service.getActivos({
+    estado: 'activo',
+    page: 1
+  });
+  
+  return assets;
+}
+```
+
+### With Custom Configuration
+
+```typescript
+const service = createBackendAPIService({
+  token: userToken,
+  timeoutMs: 10000,      // 10 second timeout
+  maxRetries: 3,         // 4 total attempts
+  backoffBaseMs: 2000    // 2 second base backoff
+});
+```
+
+### With Custom Fetch (for Testing)
+
+```typescript
+import { BackendAPIService } from '@/app/lib/services/backend-api-service';
+
+const mockFetch = vi.fn();
+
+const service = new BackendAPIService(
+  { baseUrl: 'http://test.com', token: 'test' },
+  { fetchFn: mockFetch }
+);
+```
+
+## Query String Building
+
+The service automatically filters out `undefined`, `null`, and empty string values:
+
+```typescript
+service.getActivos({
+  tipo: 'equipo',      // ✓ Included
+  estado: undefined,   // ✗ Excluded
+  busqueda: ''        // ✗ Excluded
+});
+
+// Result: /api/catalogo/activos?tipo=equipo
+```
+
+**Implementation**: `app/lib/services/backend-api-service.ts:225-234`
+
+## Testing
+
+### Mocking the Service
+
+```typescript
+import { vi } from 'vitest';
+import type { BackendAPIService } from '@/app/lib/services/backend-api-service';
+
+// Mock the service
+const mockService: Partial<BackendAPIService> = {
+  getActivos: vi.fn().mockResolvedValue({
+    items: [{ id: 1, nombre: 'Test Asset' }],
+    pagination: { page: 1, total: 1, hasMore: false }
+  })
+};
+```
+
+### Testing Error Handling
+
+```typescript
+import { BackendTimeoutError } from '@/app/lib/services/backend-api-service';
+
+test('handles timeout gracefully', async () => {
+  const mockService = {
+    getActivos: vi.fn().mockRejectedValue(
+      new BackendTimeoutError('/api/catalogo/activos', 8000)
+    )
+  };
+  
+  await expect(mockService.getActivos()).rejects.toThrow(BackendTimeoutError);
+});
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Token Per Request" icon="key">
+    Always create a new service instance per request with the user's token. Never share instances.
+  </Card>
+  
+  <Card title="Handle Timeouts" icon="clock">
+    Implement user-facing messaging for timeouts and suggest more specific filters.
+  </Card>
+  
+  <Card title="Use Type Safety" icon="shield">
+    Leverage TypeScript types from schemas for compile-time safety.
+  </Card>
+  
+  <Card title="Graceful Degradation" icon="circle-check">
+    If backend is unavailable, fall back to cached data or demo mode.
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="401 Unauthorized Error">
+    **Cause**: Invalid or expired token.
+    
+    **Solution**:
+    - Verify the user is logged in
+    - Check that Laravel Sanctum is configured
+    - Ensure token is correctly extracted from cookies
+  </Accordion>
+
+  <Accordion title="Timeout Errors">
+    **Cause**: Backend query taking too long (>8s).
+    
+    **Solution**:
+    - Add more specific filters to the query
+    - Optimize backend database queries
+    - Increase `timeoutMs` if needed
+  </Accordion>
+
+  <Accordion title="BackendAPIError: NEXT_PUBLIC_BACKEND_API_URL not configured">
+    **Cause**: Missing environment variable.
+    
+    **Solution**:
+    - Add `NEXT_PUBLIC_BACKEND_API_URL` to `.env.local`
+    - Verify it's a valid URL
+    - Restart the dev server
+  </Accordion>
+
+  <Accordion title="CORS Errors">
+    **Cause**: Laravel not allowing requests from Next.js origin.
+    
+    **Solution**:
+    - Configure Laravel CORS middleware
+    - Add Next.js URL to allowed origins
+    - Ensure credentials are included in requests
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" href="/guides/configuration" icon="gear">
+    Set up the backend URL and authentication
+  </Card>
+  
+  <Card title="Testing" href="/guides/testing" icon="vial">
+    Learn how to write tests for backend integration
+  </Card>
+</CardGroup>

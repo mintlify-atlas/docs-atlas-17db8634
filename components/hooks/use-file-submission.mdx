@@ -1,0 +1,490 @@
+---
+title: "useFileSubmission"
+description: "React hook for handling file attachments with automatic analysis for images and PDFs in chat"
+---
+
+## Overview
+
+The `useFileSubmission` hook provides comprehensive file handling for chat messages, supporting automatic analysis of images and PDFs using AI.
+
+### Features
+
+- **Image Analysis** - Automatic visual analysis using Gemini Vision API
+- **PDF Processing** - Extract and analyze PDF content
+- **File Validation** - Size limits and format checking
+- **Voice Integration** - Automatically stops voice recording when submitting
+- **Progress Tracking** - Real-time analysis state indicators
+- **Error Handling** - User-friendly error messages
+
+## Import
+
+```tsx
+import { useFileSubmission } from '@/app/components/features/chat/hooks';
+```
+
+## Parameters
+
+<ParamField path="setMessages" type="function" required>
+  Function to update the messages array
+  
+  ```tsx
+  (messages: UIMessage[] | ((messages: UIMessage[]) => UIMessage[])) => void
+  ```
+</ParamField>
+
+<ParamField path="sendMessage" type="function" required>
+  Function to send regular text messages (without files)
+  
+  ```tsx
+  (
+    message: { role: 'user'; content: string } | string,
+    options?: ChatRequestOptions
+  ) => Promise<string | null | undefined>
+  ```
+</ParamField>
+
+<ParamField path="isListening" type="boolean" required>
+  Whether voice mode is actively listening
+</ParamField>
+
+<ParamField path="toggleListening" type="function" required>
+  Function to toggle voice listening state
+  
+  ```tsx
+  () => void
+  ```
+</ParamField>
+
+## Return Value
+
+<ResponseField name="handleSubmit" type="function">
+  Handler for message submission with file support
+  
+  ```tsx
+  (message: PromptInputMessage) => Promise<void>
+  ```
+</ResponseField>
+
+<ResponseField name="isAnalyzing" type="boolean">
+  Whether a file is currently being analyzed
+</ResponseField>
+
+<ResponseField name="analyzingFileType" type="'image' | 'pdf' | null">
+  The type of file currently being analyzed, or null if not analyzing
+</ResponseField>
+
+## Types
+
+```tsx
+interface UseFileSubmissionParams {
+  setMessages: (messages: UIMessage[] | ((messages: UIMessage[]) => UIMessage[])) => void;
+  sendMessage: (
+    message: { role: 'user'; content: string } | string,
+    options?: ChatRequestOptions
+  ) => Promise<string | null | undefined>;
+  isListening: boolean;
+  toggleListening: () => void;
+}
+
+interface UseFileSubmissionReturn {
+  handleSubmit: (message: PromptInputMessage) => Promise<void>;
+  isAnalyzing: boolean;
+  analyzingFileType: 'image' | 'pdf' | null;
+}
+
+interface PromptInputMessage {
+  text?: string;
+  files?: FileAttachment[];
+}
+
+interface FileAttachment {
+  url?: string;
+  mediaType?: string;
+  name?: string;
+}
+```
+
+## How It Works
+
+### File Detection
+
+The hook automatically detects attached file types:
+
+1. **Images** - Any file with `mediaType` starting with `image/`
+2. **PDFs** - Files with `mediaType` of `application/pdf`
+3. **Other** - Treated as normal text message
+
+### Processing Flow
+
+#### Image Files
+
+1. Validates file size (max 5MB)
+2. Converts blob URL to base64
+3. Adds user message with image to chat
+4. Calls `analyzePartImage` server action
+5. Returns structured analysis:
+   - Type of item detected
+   - Physical condition
+   - Confidence level
+   - Brand/model (if applicable)
+   - Quantity detected
+   - Detailed description
+   - Recommendations
+
+#### PDF Files
+
+1. Validates file size (max 10MB)
+2. Converts blob URL to base64
+3. Adds user message with PDF to chat
+4. Calls `analyzePdf` server action
+5. Returns text analysis of PDF content
+
+#### Text Messages
+
+1. Adds user message to chat
+2. Calls `sendMessage` with configured model
+3. Streams AI response
+
+### File Size Limits
+
+| File Type | Max Size |
+|-----------|----------|
+| Images | 5 MB |
+| PDFs | 10 MB |
+
+<Warning>
+Files exceeding these limits will trigger an error and not be processed.
+</Warning>
+
+## Usage Examples
+
+### Basic Usage
+
+```tsx
+import { useFileSubmission } from '@/app/components/features/chat/hooks';
+import { useState } from 'react';
+
+function ChatWithFiles() {
+  const [messages, setMessages] = useState<UIMessage[]>([]);
+  const [isListening, setIsListening] = useState(false);
+
+  const sendMessage = async (message: any, options?: any) => {
+    // Your message sending logic
+    return 'message-id';
+  };
+
+  const { handleSubmit, isAnalyzing, analyzingFileType } = useFileSubmission({
+    setMessages,
+    sendMessage,
+    isListening,
+    toggleListening: () => setIsListening(!isListening)
+  });
+
+  return (
+    <div>
+      {isAnalyzing && (
+        <div className="analyzing">
+          Analyzing {analyzingFileType}...
+        </div>
+      )}
+      
+      <form onSubmit={(e) => {
+        e.preventDefault();
+        handleSubmit({
+          text: 'Analyze this image',
+          files: [/* file attachments */]
+        });
+      }}>
+        {/* Your form fields */}
+      </form>
+    </div>
+  );
+}
+```
+
+### With File Upload
+
+```tsx
+import { useFileSubmission } from '@/app/components/features/chat/hooks';
+import { useState } from 'react';
+
+function FileUploadChat() {
+  const [messages, setMessages] = useState<UIMessage[]>([]);
+  const [isListening, setIsListening] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileUrl, setFileUrl] = useState<string | null>(null);
+
+  const { handleSubmit, isAnalyzing, analyzingFileType } = useFileSubmission({
+    setMessages,
+    sendMessage: async (msg, opts) => {
+      // Send to your API
+      return 'msg-id';
+    },
+    isListening,
+    toggleListening: () => setIsListening(!isListening)
+  });
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      setFileUrl(URL.createObjectURL(file));
+    }
+  };
+
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!fileUrl || !selectedFile) return;
+
+    await handleSubmit({
+      text: 'Analyze this file',
+      files: [{
+        url: fileUrl,
+        mediaType: selectedFile.type,
+        name: selectedFile.name
+      }]
+    });
+
+    // Cleanup
+    setSelectedFile(null);
+    setFileUrl(null);
+  };
+
+  return (
+    <form onSubmit={handleFormSubmit}>
+      <input
+        type="file"
+        accept="image/*,application/pdf"
+        onChange={handleFileSelect}
+        disabled={isAnalyzing}
+      />
+
+      {selectedFile && (
+        <div className="preview">
+          <p>Selected: {selectedFile.name}</p>
+          {selectedFile.type.startsWith('image/') && (
+            <img src={fileUrl!} alt="Preview" />
+          )}
+        </div>
+      )}
+
+      <button type="submit" disabled={!selectedFile || isAnalyzing}>
+        {isAnalyzing ? `Analyzing ${analyzingFileType}...` : 'Submit'}
+      </button>
+    </form>
+  );
+}
+```
+
+### With Progress Indicators
+
+```tsx
+import { useFileSubmission } from '@/app/components/features/chat/hooks';
+import { useState } from 'react';
+
+function ChatWithProgress() {
+  const [messages, setMessages] = useState<UIMessage[]>([]);
+  const [isListening, setIsListening] = useState(false);
+
+  const { handleSubmit, isAnalyzing, analyzingFileType } = useFileSubmission({
+    setMessages,
+    sendMessage: async (msg, opts) => 'msg-id',
+    isListening,
+    toggleListening: () => setIsListening(!isListening)
+  });
+
+  return (
+    <div>
+      {/* Messages */}
+      <div className="messages">
+        {messages.map((msg) => (
+          <div key={msg.id} className={`message ${msg.role}`}>
+            {msg.content}
+            
+            {/* Show image/PDF in message */}
+            {msg.parts?.map((part, i) => (
+              <div key={i}>
+                {part.type === 'image' && part.imageUrl && (
+                  <img src={part.imageUrl} alt="Attached" />
+                )}
+                {part.type === 'file' && (
+                  <div className="file-attachment">
+                    📄 PDF Attachment
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+
+      {/* Analysis Progress */}
+      {isAnalyzing && (
+        <div className="analysis-progress">
+          <div className="spinner" />
+          <p>
+            {analyzingFileType === 'image' && '🖼️ Analyzing image with AI...'}
+            {analyzingFileType === 'pdf' && '📄 Processing PDF...'}
+          </p>
+        </div>
+      )}
+
+      {/* Your input form */}
+    </div>
+  );
+}
+```
+
+### Complete Integration with PromptInput
+
+```tsx
+import { useFileSubmission } from '@/app/components/features/chat/hooks';
+import { PromptInput } from '@components/ai-elements/prompt-input';
+import { useState } from 'react';
+
+function CompleteFileChat() {
+  const [messages, setMessages] = useState<UIMessage[]>([]);
+  const [isListening, setIsListening] = useState(false);
+  const [input, setInput] = useState('');
+
+  const { handleSubmit, isAnalyzing, analyzingFileType } = useFileSubmission({
+    setMessages,
+    sendMessage: async (message, options) => {
+      // Your API call
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        body: JSON.stringify({ message, options })
+      });
+      return 'msg-id';
+    },
+    isListening,
+    toggleListening: () => setIsListening(!isListening)
+  });
+
+  return (
+    <div className="chat-container">
+      {/* Messages Display */}
+      <div className="messages">
+        {messages.map((msg) => (
+          <div key={msg.id} className={msg.role}>
+            {msg.content}
+          </div>
+        ))}
+      </div>
+
+      {/* Analysis Indicator */}
+      {isAnalyzing && (
+        <div className="status">
+          Analyzing {analyzingFileType}... Please wait.
+        </div>
+      )}
+
+      {/* Input with File Support */}
+      <PromptInput
+        value={input}
+        onChange={setInput}
+        onSubmit={handleSubmit}
+        disabled={isAnalyzing}
+        placeholder={
+          isAnalyzing 
+            ? `Analyzing ${analyzingFileType}...` 
+            : 'Type a message or attach a file...'
+        }
+        accept="image/*,application/pdf"
+      />
+    </div>
+  );
+}
+```
+
+## Image Analysis Output
+
+When an image is analyzed, the hook formats the result as follows:
+
+```markdown
+📱 **Análisis Visual (IA)**
+
+| Atributo | Detalle |
+| :--- | :--- |
+| **Tipo** | Smartphone |
+| **Estado** | Bueno |
+| **Confianza** | Alta |
+| **Marca** | Apple |
+| **Modelo** | iPhone 14 Pro |
+| **Cantidad** | 1 |
+
+**Descripción detallada:**
+> iPhone 14 Pro en excelente condición física, sin rayones visibles...
+
+💡 **Recomendación:**  
+*Se recomienda verificar funcionalidad de cámara y Face ID*
+
+---
+*Generado automáticamente por IA a partir de la imagen.*
+```
+
+## Error Handling
+
+The hook provides comprehensive error handling:
+
+```tsx
+try {
+  await handleSubmit({ text: 'Test', files });
+} catch (error) {
+  // Errors are automatically:
+  // 1. Logged to console
+  // 2. Added to chat as error message
+  // 3. Shown via toast notification
+  // 4. Reflected in isAnalyzing state
+}
+```
+
+### Common Errors
+
+- **File too large** - "El archivo excede el límite de XMB"
+- **Invalid format** - "Formato de archivo no soportado"
+- **Network error** - "Error de conexión"
+- **API error** - "Error al analizar [tipo]: [detalle]"
+
+## Performance Considerations
+
+### Optimization Tips
+
+1. **File Size** - Keep files under recommended limits
+2. **Format** - Use JPEG for images (better compression than PNG)
+3. **Concurrent Uploads** - Hook prevents concurrent analysis automatically
+4. **Memory Management** - Blob URLs are created and managed efficiently
+
+### Loading States
+
+```tsx
+const { isAnalyzing, analyzingFileType } = useFileSubmission({...});
+
+// Disable UI during analysis
+<button disabled={isAnalyzing}>Send</button>
+<input disabled={isAnalyzing} />
+
+// Show type-specific loading
+{isAnalyzing && (
+  <div>
+    {analyzingFileType === 'image' && 'Analyzing image...'}
+    {analyzingFileType === 'pdf' && 'Processing PDF...'}
+  </div>
+)}
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="useChatSubmit" icon="message" href="/components/hooks/use-chat">
+    Standard message submission without files
+  </Card>
+  <Card title="PromptInput" icon="keyboard" href="/components/ai-elements/prompt-input">
+    Input component with file attachment support
+  </Card>
+</CardGroup>
+
+## Source Code
+
+Location: `app/components/features/chat/hooks/use-file-submission.ts:44`

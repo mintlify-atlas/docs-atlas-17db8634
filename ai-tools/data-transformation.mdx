@@ -1,0 +1,208 @@
+---
+title: "Data Transformation"
+description: "Transform and visualize maintenance data with generative UI"
+icon: "chart-line"
+---
+
+Use natural language to query, transform, and visualize asset and maintenance data with AI-powered generative UI.
+
+## Overview
+
+The Data Transformation tool allows you to:
+- Query backend data using natural language
+- Display results in interactive tables
+- Filter and sort data dynamically
+- Visualize trends and patterns
+
+## Natural Language Queries
+
+Just ask in plain language:
+
+<Tabs>
+  <Tab title="Assets">
+    - "Show me all HVAC units"
+    - "List equipment in sector 3"
+    - "Find assets needing maintenance"
+    - "Display generators by status"
+  </Tab>
+  <Tab title="Inventory">
+    - "Which parts are low in stock?"
+    - "Show me spare parts for pumps"
+    - "List suppliers for HVAC components"
+    - "Display most expensive inventory items"
+  </Tab>
+  <Tab title="Maintenance">
+    - "Show pending work orders"
+    - "List maintenance scheduled this week"
+    - "Display overdue maintenance tasks"
+    - "Show completed work in March"
+  </Tab>
+</Tabs>
+
+## Generative UI Tables
+
+Query results are displayed in rich, interactive tables:
+
+### Features
+
+<CardGroup cols={2}>
+  <Card title="Interactive" icon="hand-pointer">
+    Click to expand, sort, and filter
+  </Card>
+  <Card title="Responsive" icon="mobile">
+    Adapts to screen size
+  </Card>
+  <Card title="Status Badges" icon="tag">
+    Color-coded status indicators
+  </Card>
+  <Card title="Pagination" icon="page-break">
+    Handle large datasets
+  </Card>
+</CardGroup>
+
+### Column Types
+
+- **Text**: Equipment names, descriptions
+- **Status Badges**: Operational status with colors
+- **Priority Badges**: High/Medium/Low indicators  
+- **Stock Indicators**: Red/yellow/green for inventory levels
+- **Dates**: Formatted maintenance dates
+- **Links**: Clickable references
+
+## How It Works
+
+<Steps>
+  <Step title="Natural Language Query">
+    Type your question in the chat:
+    ```text
+    "Muéstrame todos los equipos de aire acondicionado"
+    ```
+  </Step>
+  <Step title="AI Processing">
+    The AI:
+    - Parses your query
+    - Identifies the data type (assets/inventory/maintenance)
+    - Determines filters and sort order
+    - Calls the appropriate backend API
+  </Step>
+  <Step title="Data Retrieval">
+    Backend API returns:
+    - Paginated results
+    - Metadata (total count, page info)
+    - Structured data objects
+  </Step>
+  <Step title="Generative UI">
+    AI generates:
+    - Table structure
+    - Column definitions
+    - Cell renderers
+    - Interactive components
+  </Step>
+</Steps>
+
+## Backend Integration
+
+Data transformation queries use the Backend API Service:
+
+```typescript
+import { createBackendAPIService } from '@/app/lib/services/backend-api-service';
+
+const api = createBackendAPIService();
+
+// Query assets
+const assets = await api.getActivos({
+  tipo: 'unidad-hvac',
+  ubicacion: 'sector-3'
+});
+
+// Query inventory
+const inventory = await api.getRepuestos({
+  bajo_stock: true
+});
+
+// Query maintenance
+const maintenance = await api.getMantenimientos({
+  estado: 'pendiente'
+});
+```
+
+See [Backend API Service](/api-reference/services/backend-api) for details.
+
+## Chat Tools Integration
+
+The transformation is powered by chat tools:
+
+- **consultar_activos** - Query asset catalog
+- **consultar_inventario** - Search spare parts
+- **consultar_mantenimientos** - List work orders
+- **consultar_calendario** - View scheduled maintenance
+- **consultar_reportes** - Access maintenance reports
+- **consultar_proveedores** - List suppliers
+
+See [Chat Tools API](/api-reference/tools/chat-tools) for tool definitions.
+
+## Advanced Features
+
+### Filters
+
+Apply filters with natural language:
+- "Show only high-priority work orders"
+- "Filter by location: Sector 3"
+- "Display equipment manufactured after 2020"
+
+### Sorting
+
+Specify sort order:
+- "Sort by date, newest first"
+- "Order by priority, high to low"
+- "Sort alphabetically by name"
+
+### Pagination
+
+Handle large datasets:
+- Results shown in pages of 15 items
+- Click "Load More" for additional pages
+- Total count displayed
+
+## Example Queries
+
+<AccordionGroup>
+  <Accordion title="Asset Queries">
+    ```
+    "Muéstrame todos los equipos de aire acondicionado"
+    "Listar activos en el edificio principal"
+    "Equipos que requieren mantenimiento urgente"
+    "Mostrar generadores en operación"
+    ```
+  </Accordion>
+  <Accordion title="Inventory Queries">
+    ```
+    "¿Qué repuestos están bajos de stock?"
+    "Mostrar inventario de filtros HVAC"
+    "Listar proveedores de partes eléctricas"
+    "Piezas más caras en inventario"
+    ```
+  </Accordion>
+  <Accordion title="Maintenance Queries">
+    ```
+    "Órdenes de trabajo pendientes"
+    "Mantenimiento programado para esta semana"
+    "Mostrar reportes del último mes"
+    "Tareas de mantenimiento vencidas"
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="Generative Tables" icon="table" href="/components/ai-elements/generative-tables">
+    Table component documentation
+  </Card>
+  <Card title="Chat Tools" icon="robot" href="/api-reference/tools/chat-tools">
+    Backend query tools reference
+  </Card>
+  <Card title="Backend API" icon="server" href="/api-reference/services/backend-api">
+    API service documentation
+  </Card>
+</CardGroup>

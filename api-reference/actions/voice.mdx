@@ -1,0 +1,175 @@
+---
+title: 'Voice Actions'
+description: 'Server actions for audio transcription and voice command processing'
+---
+
+## Overview
+
+The Voice Actions module provides server-side functions for processing audio input, transcribing speech to text, and parsing voice commands using Google's Gemini AI models.
+
+## transcribeAudio
+
+Transcribes audio files using the Gemini Flash Lite model with specialized prompting to clean timestamps and filler words.
+
+```typescript
+export async function transcribeAudio(
+  audioDataUrl: string,
+  mimeType: string = 'audio/webm'
+): Promise<{ text: string; success: boolean; error?: string }>
+```
+
+### Parameters
+
+<ParamField path="audioDataUrl" type="string" required>
+  Base64-encoded audio string (data:audio/...)
+</ParamField>
+
+<ParamField path="mimeType" type="string" default="audio/webm">
+  MIME type of the audio file
+</ParamField>
+
+### Response
+
+<ResponseField name="text" type="string">
+  Transcribed and cleaned text from the audio
+</ResponseField>
+
+<ResponseField name="success" type="boolean">
+  Whether the transcription succeeded
+</ResponseField>
+
+<ResponseField name="error" type="string" optional>
+  Error message if transcription failed
+</ResponseField>
+
+### Features
+
+- **Size Validation**: Enforces maximum audio size limits (configured in `MAX_AUDIO_SIZE_MB`)
+- **Automatic Cleaning**: Removes timestamps (00:00, 01:23, etc.) and excessive line breaks
+- **Error Handling**: Returns structured error responses with logging
+
+### Example
+
+```typescript
+const result = await transcribeAudio("data:audio/webm;base64,GkXfo59ChoEBQveBAULygQRC...");
+
+if (result.success) {
+  console.log("Transcription:", result.text);
+} else {
+  console.error("Error:", result.error);
+}
+```
+
+---
+
+## executeVoiceCommand
+
+Parses a voice transcription into a structured command using AI-powered natural language understanding.
+
+```typescript
+export async function executeVoiceCommand(
+  transcript: string,
+  options?: { minConfidence?: number; context?: string }
+): Promise<
+  | { success: true; command: VoiceCommand }
+  | { success: false; error: string; code: string; recoverable: boolean }
+>
+```
+
+### Parameters
+
+<ParamField path="transcript" type="string" required>
+  Transcribed text from voice input
+</ParamField>
+
+<ParamField path="options" type="object">
+  Optional parsing configuration
+  
+  <ParamField path="options.minConfidence" type="number" default={0.7}>
+    Minimum confidence threshold (0-1) for accepting parsed commands
+  </ParamField>
+  
+  <ParamField path="options.context" type="string">
+    Additional context to help the AI understand the command
+  </ParamField>
+</ParamField>
+
+### Response (Success)
+
+<ResponseField name="success" type="boolean">
+  Returns `true` on successful parsing
+</ResponseField>
+
+<ResponseField name="command" type="VoiceCommand">
+  Parsed command object with action type and parameters
+</ResponseField>
+
+### Response (Failure)
+
+<ResponseField name="success" type="boolean">
+  Returns `false` on parsing failure
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Human-readable error message
+</ResponseField>
+
+<ResponseField name="code" type="string">
+  Error code: `MISSING_API_KEY`, `PARSING_FAILED`, or `EXECUTION_ERROR`
+</ResponseField>
+
+<ResponseField name="recoverable" type="boolean">
+  Whether the error is recoverable (e.g., user can retry)
+</ResponseField>
+
+### Features
+
+- **API Key Validation**: Checks for `GOOGLE_GENERATIVE_AI_API_KEY` before processing
+- **Structured Validation**: Uses Zod schemas for command validation
+- **Language Support**: Configured for Spanish (es-ES) commands
+- **Confidence Scoring**: Filters low-confidence interpretations
+
+### Example
+
+```typescript
+const result = await executeVoiceCommand(
+  "Crear orden urgente para la UMA",
+  { minConfidence: 0.8, context: "work orders" }
+);
+
+if (result.success) {
+  console.log("Action:", result.command.action);
+  console.log("Parameters:", result.command.parameters);
+} else {
+  console.error(`Error [${result.code}]:`, result.error);
+  console.log("Recoverable:", result.recoverable);
+}
+```
+
+### Error Codes
+
+| Code | Description | Recoverable |
+|------|-------------|-------------|
+| `MISSING_API_KEY` | Google AI API key not configured | No |
+| `PARSING_FAILED` | Could not parse command from transcript | Yes |
+| `EXECUTION_ERROR` | Unexpected error during processing | No |
+
+---
+
+## Configuration
+
+### Environment Variables
+
+- `GOOGLE_GENERATIVE_AI_API_KEY`: Required for all voice operations
+- `MAX_AUDIO_SIZE_MB`: Maximum audio file size (defined in `config/limits`)
+
+### Dependencies
+
+- `@ai-sdk/google`: Google AI SDK for Gemini models
+- `ai`: Vercel AI SDK for text generation
+- `VoiceCommandParserService`: Internal service for command parsing
+
+### Models Used
+
+- **Transcription**: `gemini-2.5-flash-lite` (optimized for speed)
+- **Command Parsing**: Configured via `VoiceCommandParserService`

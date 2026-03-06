@@ -1,0 +1,703 @@
+---
+title: "Installation"
+description: "Complete installation and setup guide for GIMA AI Chatbot"
+---
+
+## System Requirements
+
+Before you begin, ensure your system meets these requirements:
+
+<CardGroup cols={2}>
+  <Card title="Node.js" icon="node-js">
+    **Version 20 or higher**
+    
+    Check your version:
+    ```bash
+    node --version
+    ```
+  </Card>
+
+  <Card title="Package Manager" icon="box">
+    **npm, yarn, or pnpm**
+    
+    Any modern package manager works:
+    - npm (comes with Node.js)
+    - yarn 1.22+
+    - pnpm 8+
+  </Card>
+</CardGroup>
+
+<Note>
+  **Recommended**: Use Node.js 20 LTS for best compatibility and performance.
+</Note>
+
+## Installation Methods
+
+Choose your preferred installation method:
+
+<Tabs>
+  <Tab title="npm">
+    ### Install with npm
+
+    <Steps>
+      <Step title="Clone Repository">
+        ```bash
+        git clone https://github.com/jose-miserol/gima-ai-chatbot.git
+        cd gima-ai-chatbot
+        ```
+      </Step>
+
+      <Step title="Install Dependencies">
+        ```bash
+        npm install
+        ```
+
+        This installs all required packages:
+        - **Next.js 16.0**: React framework
+        - **React 19**: UI library
+        - **Vercel AI SDK v5**: AI integration
+        - **Tailwind CSS 4**: Styling
+        - **Zod 4**: Schema validation
+        - And more (see `package.json`)
+      </Step>
+
+      <Step title="Setup Environment">
+        ```bash
+        cp .env.example .env.local
+        ```
+
+        Edit `.env.local` with your configuration (see [Environment Variables](#environment-variables) below)
+      </Step>
+
+      <Step title="Start Development Server">
+        ```bash
+        npm run dev
+        ```
+
+        Server starts at [http://localhost:3000](http://localhost:3000)
+      </Step>
+    </Steps>
+  </Tab>
+
+  <Tab title="yarn">
+    ### Install with Yarn
+
+    <Steps>
+      <Step title="Clone Repository">
+        ```bash
+        git clone https://github.com/jose-miserol/gima-ai-chatbot.git
+        cd gima-ai-chatbot
+        ```
+      </Step>
+
+      <Step title="Install Dependencies">
+        ```bash
+        yarn install
+        ```
+      </Step>
+
+      <Step title="Setup Environment">
+        ```bash
+        cp .env.example .env.local
+        ```
+
+        Edit `.env.local` with your API keys
+      </Step>
+
+      <Step title="Start Development Server">
+        ```bash
+        yarn dev
+        ```
+      </Step>
+    </Steps>
+  </Tab>
+
+  <Tab title="pnpm">
+    ### Install with pnpm
+
+    <Steps>
+      <Step title="Clone Repository">
+        ```bash
+        git clone https://github.com/jose-miserol/gima-ai-chatbot.git
+        cd gima-ai-chatbot
+        ```
+      </Step>
+
+      <Step title="Install Dependencies">
+        ```bash
+        pnpm install
+        ```
+      </Step>
+
+      <Step title="Setup Environment">
+        ```bash
+        cp .env.example .env.local
+        ```
+
+        Edit `.env.local` with your API keys
+      </Step>
+
+      <Step title="Start Development Server">
+        ```bash
+        pnpm dev
+        ```
+      </Step>
+    </Steps>
+  </Tab>
+</Tabs>
+
+## Environment Variables
+
+GIMA uses environment variables for configuration. All variables are validated at startup using Zod schemas.
+
+### Required Variables
+
+These API keys are **required** for the chatbot to function:
+
+<ParamField path="GROQ_API_KEY" type="string" required>
+  GROQ API key for LLaMA 3.3 language model (main chat functionality)
+  
+  - **Format**: Must start with `gsk_`
+  - **Get it**: [console.groq.com/keys](https://console.groq.com/keys)
+  - **Free tier**: Yes, generous limits
+  
+  ```env
+  GROQ_API_KEY=gsk_your_api_key_here
+  ```
+</ParamField>
+
+<ParamField path="GOOGLE_GENERATIVE_AI_API_KEY" type="string" required>
+  Google Gemini API key for voice transcription and image analysis
+  
+  - **Format**: Must start with `AIza`
+  - **Get it**: [makersuite.google.com/app/apikey](https://makersuite.google.com/app/apikey)
+  - **Free tier**: Yes, 1500 requests/day
+  
+  ```env
+  GOOGLE_GENERATIVE_AI_API_KEY=AIzaYourAPIKeyHere
+  ```
+</ParamField>
+
+### Optional Variables
+
+<ParamField path="NODE_ENV" type="string" default="development">
+  Runtime environment
+  
+  - **Values**: `development`, `production`, `test`
+  - **Effect**: Changes logging, error handling, and security headers
+  
+  ```env
+  NODE_ENV=development
+  ```
+</ParamField>
+
+<ParamField path="NEXT_PUBLIC_APP_URL" type="string" default="http://localhost:3000">
+  Base URL of the application (for production deployments)
+  
+  ```env
+  NEXT_PUBLIC_APP_URL=https://your-domain.com
+  ```
+</ParamField>
+
+### Feature Flags
+
+Control optional features using these environment variables:
+
+<ParamField path="NEXT_PUBLIC_ENABLE_CHAT_PERSISTENCE" type="boolean" default="false">
+  Enable localStorage persistence for chat history
+  
+  ```env
+  NEXT_PUBLIC_ENABLE_CHAT_PERSISTENCE=true
+  ```
+  
+  **When enabled:**
+  - Messages persist across page refreshes
+  - Stored in browser localStorage with key `gima_chat_history`
+  - Users can clear history manually
+  
+  **When disabled:**
+  - Chat history only exists in memory
+  - Cleared on page refresh
+</ParamField>
+
+<ParamField path="NEXT_PUBLIC_FEATURE_VOICE_COMMANDS" type="boolean" default="false">
+  Enable voice-activated work order commands
+  
+  ```env
+  NEXT_PUBLIC_FEATURE_VOICE_COMMANDS=true
+  ```
+</ParamField>
+
+<ParamField path="NEXT_PUBLIC_FEATURE_PDF_READER" type="boolean" default="false">
+  Enable PDF upload and analysis
+  
+  ```env
+  NEXT_PUBLIC_FEATURE_PDF_READER=true
+  ```
+</ParamField>
+
+### Complete .env.local Example
+
+```env .env.local
+# ========================================
+# Required API Keys
+# ========================================
+GROQ_API_KEY=gsk_your_groq_api_key_here
+GOOGLE_GENERATIVE_AI_API_KEY=AIzaYourGoogleAPIKeyHere
+
+# ========================================
+# Environment Configuration
+# ========================================
+NODE_ENV=development
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# ========================================
+# Feature Flags
+# ========================================
+NEXT_PUBLIC_ENABLE_CHAT_PERSISTENCE=true
+NEXT_PUBLIC_FEATURE_VOICE_COMMANDS=true
+NEXT_PUBLIC_FEATURE_PDF_READER=true
+```
+
+<Warning>
+  **Security**: Never commit `.env.local` to version control. It's already in `.gitignore`.
+</Warning>
+
+## Key Technologies
+
+GIMA is built with modern, production-ready technologies:
+
+<CardGroup cols={2}>
+  <Card title="Next.js 16" icon="react">
+    **App Router** with server components
+    
+    - File-based routing
+    - Server Actions for API calls
+    - Built-in optimization
+  </Card>
+
+  <Card title="React 19" icon="atom">
+    **Latest React** with concurrent features
+    
+    - Improved performance
+    - Better Suspense
+    - Enhanced hooks
+  </Card>
+
+  <Card title="Vercel AI SDK v5" icon="brain">
+    **AI framework** for chat and streaming
+    
+    - `useChat` hook
+    - Streaming responses
+    - Tool calling support
+  </Card>
+
+  <Card title="Tailwind CSS 4" icon="paintbrush">
+    **Utility-first CSS** framework
+    
+    - Responsive design
+    - Dark mode support
+    - Custom theme
+  </Card>
+
+  <Card title="TypeScript 5" icon="code">
+    **Type safety** throughout
+    
+    - Strict mode enabled
+    - Full IDE support
+    - Runtime validation
+  </Card>
+
+  <Card title="Zod 4" icon="shield-check">
+    **Schema validation** for data
+    
+    - Type inference
+    - Runtime safety
+    - Error handling
+  </Card>
+</CardGroup>
+
+## Available Scripts
+
+The project includes several npm scripts for development and testing:
+
+<CodeGroup>
+```bash Development
+# Start development server with hot reload
+npm run dev
+
+# Open at http://localhost:3000
+```
+
+```bash Build
+# Create optimized production build
+npm run build
+
+# Start production server
+npm run start
+```
+
+```bash Code Quality
+# Run ESLint
+npm run lint
+
+# Auto-fix ESLint issues
+npm run lint:fix
+
+# Format code with Prettier
+npm run format
+
+# Type-check TypeScript
+npm run type-check
+```
+
+```bash Testing
+# Run tests with Vitest
+npm test
+
+# Interactive test UI
+npm run test:ui
+
+# Generate coverage report
+npm run test:coverage
+```
+
+```bash Analysis
+# Analyze bundle size
+npm run analyze
+```
+</CodeGroup>
+
+## Project Structure
+
+Understanding the project layout:
+
+```text
+gima-ai-chatbot/
+├── app/
+│   ├── api/                    # API routes
+│   │   └── chat/
+│   │       └── route.ts       # Main chat endpoint
+│   ├── actions/               # Server Actions
+│   │   ├── voice.ts          # Voice transcription
+│   │   ├── vision.ts         # Image analysis
+│   │   └── files.ts          # PDF processing
+│   ├── components/           # React components
+│   │   ├── features/         # Feature components
+│   │   │   ├── chat/        # Chat UI
+│   │   │   └── voice/       # Voice components
+│   │   ├── ai-elements/     # AI-generated UI
+│   │   └── ui/              # Base UI (shadcn/ui)
+│   ├── config/              # Configuration
+│   │   └── env.ts          # Environment validation
+│   ├── hooks/              # Custom React hooks
+│   │   ├── use-persistent-chat.ts
+│   │   ├── use-voice-input.ts
+│   │   └── use-file-submission.ts
+│   ├── lib/                # Libraries and utilities
+│   │   ├── ai/            # AI configuration
+│   │   │   └── chat-tools.ts  # Tool definitions
+│   │   ├── services/      # Business logic
+│   │   │   ├── chat-service.ts
+│   │   │   └── backend-api.ts
+│   │   └── schemas/       # Zod schemas
+│   ├── types/             # TypeScript types
+│   └── page.tsx          # Main page
+├── public/               # Static assets
+├── tests/               # Test files
+├── .env.example        # Environment template
+└── package.json       # Dependencies
+```
+
+<Tip>
+  **Key files to explore:**
+  - `app/components/features/chat/chat.tsx` - Main chat component
+  - `app/api/chat/route.ts` - Chat API endpoint
+  - `app/lib/ai/chat-tools.ts` - AI tool definitions
+</Tip>
+
+## Verification Steps
+
+After installation, verify everything works:
+
+<Steps>
+  <Step title="Check Server Status">
+    Server should start without errors:
+    
+    ```bash
+    npm run dev
+    ```
+    
+    Expected output:
+    ```
+    ✓ Ready in 2.5s
+    ○ Local:   http://localhost:3000
+    ```
+  </Step>
+
+  <Step title="Test Basic Chat">
+    1. Open [http://localhost:3000](http://localhost:3000)
+    2. Type: "Hola, ¿qué puedes hacer?"
+    3. Press Enter
+    
+    You should see a streaming response from the AI.
+  </Step>
+
+  <Step title="Test Voice Input (Optional)">
+    1. Click the microphone icon
+    2. Allow browser microphone access
+    3. Say something like "Prueba de voz"
+    4. Text should appear in the input box
+  </Step>
+
+  <Step title="Test Image Analysis (Optional)">
+    1. Click the image upload icon
+    2. Upload a photo of equipment or machinery
+    3. The AI should analyze and describe the image
+  </Step>
+
+  <Step title="Run Tests">
+    Ensure all tests pass:
+    
+    ```bash
+    npm test
+    ```
+    
+    All tests should pass with green checkmarks.
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+Common issues and solutions:
+
+<AccordionGroup>
+  <Accordion title="Installation fails with module not found errors">
+    **Symptoms:**
+    ```
+    Error: Cannot find module '@ai-sdk/react'
+    ```
+
+    **Solution:**
+    1. Delete `node_modules` and lock file:
+       ```bash
+       rm -rf node_modules package-lock.json
+       npm install
+       ```
+    2. Ensure you're using Node.js 20+:
+       ```bash
+       node --version
+       ```
+  </Accordion>
+
+  <Accordion title="ZodError: Expected string, received undefined">
+    **Symptoms:**
+    Server crashes on startup with Zod validation errors for environment variables.
+
+    **Cause:**
+    Missing or incorrectly formatted API keys in `.env.local`.
+
+    **Solution:**
+    1. Verify `.env.local` exists and has correct keys
+    2. Check key formats:
+       - GROQ: starts with `gsk_`
+       - Google: starts with `AIza`
+    3. On Windows, ensure UTF-8 encoding (not UTF-16):
+       ```powershell
+       $content = Get-Content .env.local -Raw -Encoding Unicode
+       [System.IO.File]::WriteAllText((Resolve-Path .env.local), $content, [System.Text.UTF8Encoding]::new($false))
+       ```
+  </Accordion>
+
+  <Accordion title="Chat not responding / Streaming fails">
+    **Symptoms:**
+    Messages don't appear, or chat shows error state.
+
+    **Solution:**
+    1. Check browser console (F12) for errors
+    2. Verify API keys are valid:
+       - Test GROQ key at [console.groq.com](https://console.groq.com)
+       - Test Google key at [AI Studio](https://makersuite.google.com)
+    3. Check rate limits (GROQ: 30 req/min)
+    4. Restart dev server: `npm run dev`
+  </Accordion>
+
+  <Accordion title="Voice input not working">
+    **Symptoms:**
+    Microphone button does nothing or shows error.
+
+    **Solution:**
+    1. Grant browser microphone permission
+    2. Check if HTTPS or localhost (WebRTC requires secure context)
+    3. Verify `GOOGLE_GENERATIVE_AI_API_KEY` is set
+    4. Try fallback: Voice should work with Web Speech API if Gemini fails
+  </Accordion>
+
+  <Accordion title="Image analysis fails">
+    **Symptoms:**
+    Uploading images shows error or no response.
+
+    **Solution:**
+    1. Check image size (max 10MB by default)
+    2. Verify `GOOGLE_GENERATIVE_AI_API_KEY` is set
+    3. Check supported formats: JPEG, PNG, WebP
+    4. Check Gemini quota at [AI Studio](https://makersuite.google.com)
+  </Accordion>
+
+  <Accordion title="Port 3000 already in use">
+    **Symptoms:**
+    ```
+    Error: Port 3000 is already in use
+    ```
+
+    **Solution:**
+    Use a different port:
+    ```bash
+    PORT=3001 npm run dev
+    ```
+
+    Or kill the process using port 3000:
+    ```bash
+    # macOS/Linux
+    lsof -ti:3000 | xargs kill
+
+    # Windows
+    netstat -ano | findstr :3000
+    taskkill /PID <PID> /F
+    ```
+  </Accordion>
+
+  <Accordion title="TypeScript errors in IDE">
+    **Symptoms:**
+    Red squiggly lines in VS Code but code runs fine.
+
+    **Solution:**
+    1. Restart TypeScript server in VS Code:
+       - Cmd/Ctrl + Shift + P
+       - "TypeScript: Restart TS Server"
+    2. Ensure you opened the project root (not a parent folder)
+    3. Check `.vscode/settings.json` for TypeScript config
+  </Accordion>
+
+  <Accordion title="Build fails but dev works">
+    **Symptoms:**
+    `npm run dev` works but `npm run build` fails.
+
+    **Solution:**
+    1. Run type-check to find issues:
+       ```bash
+       npm run type-check
+       ```
+    2. Fix any TypeScript errors
+    3. Check for environment variables used in build (must be set)
+    4. Clear Next.js cache:
+       ```bash
+       rm -rf .next
+       npm run build
+       ```
+  </Accordion>
+</AccordionGroup>
+
+## Development Workflow
+
+Recommended workflow for contributing to GIMA:
+
+<Steps>
+  <Step title="Setup Git Hooks">
+    Husky automatically installs Git hooks for:
+    - **Pre-commit**: Lints and formats staged files
+    - **Commit-msg**: Validates commit message format
+    
+    ```bash
+    npm run prepare
+    ```
+  </Step>
+
+  <Step title="Create Feature Branch">
+    ```bash
+    git checkout -b feature/your-feature-name
+    ```
+  </Step>
+
+  <Step title="Make Changes">
+    - Write code
+    - Add tests in `tests/` directory
+    - Update documentation if needed
+  </Step>
+
+  <Step title="Run Quality Checks">
+    ```bash
+    # Lint and format
+    npm run lint:fix
+    npm run format
+
+    # Type check
+    npm run type-check
+
+    # Run tests
+    npm test
+    ```
+  </Step>
+
+  <Step title="Commit with Conventional Commits">
+    ```bash
+    git add .
+    git commit -m "feat: add new feature"
+    ```
+    
+    Allowed types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`
+  </Step>
+
+  <Step title="Push and Create PR">
+    ```bash
+    git push origin feature/your-feature-name
+    ```
+    
+    Then create a Pull Request on GitHub.
+  </Step>
+</Steps>
+
+<Tip>
+  **Commit Message Format**: `type(scope): description`
+  
+  Examples:
+  - `feat(chat): add message reactions`
+  - `fix(voice): resolve transcription timeout`
+  - `docs(readme): update installation steps`
+</Tip>
+
+## Next Steps
+
+Now that you have GIMA installed:
+
+<CardGroup cols={2}>
+  <Card title="Configuration Guide" icon="gear" href="/guides/configuration">
+    Learn about advanced configuration options
+  </Card>
+
+  <Card title="Core Features" icon="stars" href="/features/multimodal-chat">
+    Explore multimodal chat capabilities
+  </Card>
+
+  <Card title="AI Tools" icon="wand-magic-sparkles" href="/ai-tools/overview">
+    Discover AI-powered maintenance tools
+  </Card>
+
+  <Card title="Architecture" icon="sitemap" href="/architecture/overview">
+    Understand the system architecture
+  </Card>
+</CardGroup>
+
+## Getting Help
+
+If you encounter issues not covered here:
+
+<CardGroup cols={2}>
+  <Card title="GitHub Issues" icon="github" href="https://github.com/jose-miserol/gima-ai-chatbot/issues">
+    Report bugs or request features
+  </Card>
+
+  <Card title="View Source Code" icon="code" href="https://github.com/jose-miserol/gima-ai-chatbot">
+    Browse the full source code
+  </Card>
+</CardGroup>

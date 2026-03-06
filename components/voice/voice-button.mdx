@@ -1,0 +1,243 @@
+---
+title: 'VoiceButton'
+description: 'Interactive button component for voice input recording with visual feedback and accessibility features'
+icon: 'microphone'
+---
+
+## Overview
+
+The `VoiceButton` component provides an interactive button for controlling voice input recording. It features multiple visual states, accessibility support, and displays real-time feedback when listening or processing audio.
+
+## Features
+
+- **Multiple States**: Visual feedback for idle, listening, processing, and disabled states
+- **Mode Support**: Works with both Gemini AI and native browser voice recognition
+- **Visual Indicators**: Displays animated waveform when actively listening
+- **Accessibility**: Full ARIA support with live status announcements
+- **Responsive Design**: Adapts to mobile and desktop layouts
+- **Theme Support**: Dark mode compatible with smooth transitions
+
+## Props
+
+<ParamField path="isListening" type="boolean" required>
+  Whether the microphone is actively listening
+</ParamField>
+
+<ParamField path="isProcessing" type="boolean" default="false">
+  Whether audio is being processed or transcribed
+</ParamField>
+
+<ParamField path="isSupported" type="boolean" required>
+  Whether voice input is supported in the current browser
+</ParamField>
+
+<ParamField path="mode" type="VoiceMode" default="'native'">
+  Voice recognition mode: `'gemini'` (AI-powered) or `'native'` (browser API)
+</ParamField>
+
+<ParamField path="onClick" type="() => void" required>
+  Click handler to toggle voice recording
+</ParamField>
+
+<ParamField path="disabled" type="boolean" default="false">
+  Whether the button should be disabled
+</ParamField>
+
+<ParamField path="className" type="string">
+  Additional CSS classes for custom styling
+</ParamField>
+
+## Visual States
+
+### Idle State
+Default state when not recording. Shows microphone icon with hover effects.
+
+```tsx
+<VoiceButton
+  isListening={false}
+  isSupported={true}
+  onClick={handleClick}
+/>
+```
+
+### Listening State
+Active recording state. Changes color based on mode (blue for Gemini, gray for native).
+
+```tsx
+<VoiceButton
+  isListening={true}
+  isSupported={true}
+  mode="gemini"
+  onClick={handleStop}
+/>
+```
+
+### Processing State
+Displays animated spinner while processing audio.
+
+```tsx
+<VoiceButton
+  isListening={false}
+  isProcessing={true}
+  isSupported={true}
+  onClick={handleClick}
+/>
+```
+
+## Usage Examples
+
+### Basic Implementation
+
+```tsx
+import { VoiceButton } from '@/app/components/features/voice/voice-button';
+import { useState } from 'react';
+
+function MyComponent() {
+  const [isListening, setIsListening] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const toggleListening = () => {
+    if (isListening) {
+      setIsListening(false);
+      setIsProcessing(true);
+      // Process the recorded audio
+    } else {
+      setIsListening(true);
+    }
+  };
+
+  return (
+    <VoiceButton
+      isListening={isListening}
+      isProcessing={isProcessing}
+      isSupported={true}
+      onClick={toggleListening}
+    />
+  );
+}
+```
+
+### With Mode Selection
+
+```tsx
+import { VoiceButton } from '@/app/components/features/voice/voice-button';
+import { useState } from 'react';
+import type { VoiceMode } from '@/app/components/features/voice/types';
+
+function VoiceRecorder() {
+  const [mode, setMode] = useState<VoiceMode>('native');
+  const [isListening, setIsListening] = useState(false);
+
+  return (
+    <div>
+      <select value={mode} onChange={(e) => setMode(e.target.value as VoiceMode)}>
+        <option value="native">Native Recognition</option>
+        <option value="gemini">Gemini AI</option>
+      </select>
+
+      <VoiceButton
+        isListening={isListening}
+        isSupported={true}
+        mode={mode}
+        onClick={() => setIsListening(!isListening)}
+      />
+    </div>
+  );
+}
+```
+
+### With Disabled State
+
+```tsx
+<VoiceButton
+  isListening={false}
+  isSupported={true}
+  disabled={isCommandExecuting}
+  onClick={toggleListening}
+/>
+```
+
+## Accessibility Features
+
+### ARIA Labels
+The component automatically manages ARIA labels based on state:
+- **Idle**: "Iniciar grabación de voz"
+- **Listening**: "Detener grabación de voz"
+
+### Live Regions
+Includes a screen reader announcement area that updates with current status:
+- "Listo para grabar"
+- "Grabando con IA" / "Grabando con método nativo"
+- "Procesando audio..."
+
+### Keyboard Support
+Fully accessible via keyboard navigation and activation.
+
+## Visual Feedback
+
+### Listening Indicator
+When actively listening, displays an animated badge with waveform (hidden on mobile):
+- Shows `AudioWaveform` animation
+- Displays mode-specific text
+- Smooth slide-in animation
+
+### Button States
+- **Hover**: Scale up slightly with color change
+- **Active**: Scale down for press feedback
+- **Processing**: Pulse animation
+- **Disabled**: Grayscale with reduced opacity
+
+## Styling
+
+### Customization
+
+```tsx
+<VoiceButton
+  isListening={false}
+  isSupported={true}
+  onClick={handleClick}
+  className="shadow-lg ring-2 ring-blue-500"
+/>
+```
+
+### Mode-Specific Colors
+
+<CardGroup cols={2}>
+  <Card title="Gemini Mode" icon="wand-magic-sparkles">
+    Blue theme (bg-blue-600) with blue ring indicator
+  </Card>
+  <Card title="Native Mode" icon="browser">
+    Gray theme (bg-gray-500) with gray ring indicator
+  </Card>
+</CardGroup>
+
+## Integration Points
+
+The VoiceButton component integrates with:
+
+- **AudioWaveform**: For visual recording feedback (see source at `voice-button.tsx:100`)
+- **Voice Constants**: Uses VOICE_LABELS for UI text (imported from `constants.ts`)
+- **Icons**: Mic, Square, and Loader2 from lucide-react
+
+## Source Reference
+
+Component implementation: `app/components/features/voice/voice-button.tsx:58`
+
+Type definitions: `app/components/features/voice/types.ts:42`
+
+## Related Components
+
+<CardGroup cols={2}>
+  <Card title="AudioWaveform" icon="waveform-lines" href="/components/voice/audio-waveform">
+    Animated waveform visualization
+  </Card>
+  <Card title="VoiceCommandMode" icon="command" href="/components/voice/command-mode">
+    Complete voice command workflow
+  </Card>
+</CardGroup>
+
+## Notes
+
+- Returns `null` if voice input is not supported (`isSupported={false}`)
+- Maximum recording time is configured in `VOICE_CONFIG.maxRecordingTime` (30 seconds)
+- Uses class-variance-authority (CVA) for type-safe style variants

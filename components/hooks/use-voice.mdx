@@ -1,0 +1,439 @@
+---
+title: "useVoiceInput"
+description: "React hook for multimodal voice input with automatic fallback between Gemini API and Web Speech API"
+---
+
+## Overview
+
+The `useVoiceInput` hook provides intelligent voice transcription with automatic mode switching between server-side (Gemini API) and client-side (Web Speech API) transcription.
+
+### Features
+
+- **Dual-mode transcription** - Primary: Gemini API for high accuracy, Fallback: Native Web Speech API
+- **Automatic fallback** - Switches modes based on network status and API availability
+- **User-friendly errors** - Simplifies technical errors into actionable messages
+- **Browser compatibility** - Gracefully handles browser capabilities
+- **Real-time feedback** - Provides state updates throughout the transcription process
+
+## Import
+
+```tsx
+import { useVoiceInput } from '@/app/hooks/use-voice-input';
+```
+
+## Parameters
+
+<ParamField path="onTranscript" type="function">
+  Callback invoked when transcription completes
+  
+  ```tsx
+  (text: string) => void
+  ```
+</ParamField>
+
+<ParamField path="onError" type="function">
+  Callback invoked when an error occurs
+  
+  ```tsx
+  (error: string) => void
+  ```
+</ParamField>
+
+<ParamField path="onStateChange" type="function">
+  Callback invoked when listening state changes
+  
+  ```tsx
+  (state: 'listening' | 'processing' | 'idle') => void
+  ```
+</ParamField>
+
+<ParamField path="language" type="string" default="es-ES">
+  BCP 47 language code for recognition (e.g., "en-US", "es-ES", "fr-FR")
+</ParamField>
+
+## Return Value
+
+<ResponseField name="isListening" type="boolean">
+  Whether voice recording is currently active
+</ResponseField>
+
+<ResponseField name="isProcessing" type="boolean">
+  Whether audio is being processed/transcribed
+</ResponseField>
+
+<ResponseField name="transcript" type="string">
+  Current transcript text
+</ResponseField>
+
+<ResponseField name="isSupported" type="boolean">
+  Whether voice input is supported in the current browser
+</ResponseField>
+
+<ResponseField name="mode" type="'gemini' | 'native'">
+  Current recognition mode
+  
+  - `gemini` - Using Gemini API (server-side)
+  - `native` - Using Web Speech API (client-side)
+</ResponseField>
+
+<ResponseField name="toggleListening" type="function">
+  Function to start/stop voice recording
+  
+  ```tsx
+  () => void
+  ```
+</ResponseField>
+
+<ResponseField name="resetTranscript" type="function">
+  Function to clear the current transcript
+  
+  ```tsx
+  () => void
+  ```
+</ResponseField>
+
+<ResponseField name="error" type="string | null">
+  Current error message, if any
+</ResponseField>
+
+## How It Works
+
+### Gemini Mode (Primary)
+
+1. Requests microphone access
+2. Records audio using MediaRecorder API
+3. Detects supported audio format (webm/opus, webm/mp3, or audio/webm)
+4. Converts audio to base64
+5. Sends to Gemini API for transcription via server action
+6. Returns high-accuracy transcription
+
+### Native Mode (Fallback)
+
+1. Uses browser's built-in Web Speech API
+2. Real-time transcription as you speak
+3. No server required
+4. Lower accuracy than Gemini
+5. Automatically activated when:
+   - Gemini API is unavailable
+   - Network is offline
+   - Quota exceeded
+   - MediaRecorder not supported
+
+### Error Handling
+
+The hook automatically simplifies technical errors:
+
+| Error Type | User-Friendly Message |
+|------------|----------------------|
+| Quota exceeded | ⏸️ Límite de API alcanzado · Modo local activo |
+| API key invalid | 🔑 API no configurada · Modo local activo |
+| Network error | 📡 Sin conexión · Modo local activo |
+| Timeout | ⏱️ Tiempo agotado · Modo local activo |
+| Audio error | 🎤 Error de audio · Modo local activo |
+| Permission denied | 🚫 Permiso de micrófono denegado |
+| Not supported | ❌ Tu navegador no soporta reconocimiento de voz |
+
+## Usage Examples
+
+### Basic Usage
+
+```tsx
+import { useVoiceInput } from '@/app/hooks/use-voice-input';
+
+function VoiceButton() {
+  const {
+    isListening,
+    isProcessing,
+    transcript,
+    toggleListening,
+    mode,
+    error
+  } = useVoiceInput({
+    onTranscript: (text) => {
+      console.log('Transcribed:', text);
+    },
+    onError: (error) => {
+      console.error('Voice error:', error);
+    },
+    language: 'es-ES'
+  });
+
+  return (
+    <div>
+      <button 
+        onClick={toggleListening} 
+        disabled={isProcessing}
+      >
+        {isListening ? 'Stop' : 'Start'} ({mode})
+      </button>
+      
+      {error && <p className="error">{error}</p>}
+      {transcript && <p>{transcript}</p>}
+      
+      {isProcessing && <p>Processing...</p>}
+    </div>
+  );
+}
+```
+
+### Chat Integration
+
+```tsx
+import { useVoiceInput } from '@/app/hooks/use-voice-input';
+import { useState } from 'react';
+
+function ChatWithVoice() {
+  const [input, setInput] = useState('');
+  const [status, setStatus] = useState<'listening' | 'processing' | 'idle'>('idle');
+
+  const {
+    isListening,
+    isProcessing,
+    toggleListening,
+    mode,
+    error
+  } = useVoiceInput({
+    onTranscript: (text) => {
+      // Set transcribed text as input
+      setInput(text);
+    },
+    onError: (error) => {
+      console.error('Voice error:', error);
+      // Still allow user to continue typing
+    },
+    onStateChange: (state) => {
+      setStatus(state);
+    },
+    language: 'es-ES'
+  });
+
+  return (
+    <div>
+      <div className="status">
+        {status === 'listening' && '🎤 Escuchando...'}
+        {status === 'processing' && '⚙️ Procesando...'}
+        {status === 'idle' && 'Listo'}
+        {mode === 'native' && ' (Modo local)'}
+      </div>
+
+      {error && (
+        <div className="error">
+          {error}
+        </div>
+      )}
+
+      <textarea
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        placeholder="Type or speak your message..."
+      />
+
+      <button
+        onClick={toggleListening}
+        disabled={isProcessing}
+        className={isListening ? 'recording' : ''}
+      >
+        {isListening ? '⏹️ Stop' : '🎤 Record'}
+      </button>
+    </div>
+  );
+}
+```
+
+### With State Indicators
+
+```tsx
+import { useVoiceInput } from '@/app/hooks/use-voice-input';
+import { useState } from 'react';
+
+function VoiceInputWithStates() {
+  const [messages, setMessages] = useState<string[]>([]);
+
+  const {
+    isListening,
+    isProcessing,
+    transcript,
+    isSupported,
+    mode,
+    toggleListening,
+    resetTranscript,
+    error
+  } = useVoiceInput({
+    onTranscript: (text) => {
+      setMessages(prev => [...prev, text]);
+      resetTranscript();
+    },
+    language: 'en-US'
+  });
+
+  if (!isSupported) {
+    return (
+      <div className="error">
+        Voice input is not supported in your browser.
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="mode-indicator">
+        Mode: {mode === 'gemini' ? '🌟 Gemini (High Accuracy)' : '🌐 Browser (Local)'}
+      </div>
+
+      {error && <div className="error">{error}</div>}
+
+      <div className="interim-transcript">
+        {isListening && transcript && (
+          <p>Interim: {transcript}</p>
+        )}
+      </div>
+
+      <button
+        onClick={toggleListening}
+        disabled={isProcessing}
+        className={`
+          ${isListening ? 'listening' : ''}
+          ${isProcessing ? 'processing' : ''}
+        `}
+      >
+        {isListening && '🔴 Recording...'}
+        {isProcessing && '⚙️ Processing...'}
+        {!isListening && !isProcessing && '🎤 Start Recording'}
+      </button>
+
+      <div className="messages">
+        {messages.map((msg, i) => (
+          <div key={i} className="message">
+            {msg}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+```
+
+### Multi-language Support
+
+```tsx
+import { useVoiceInput } from '@/app/hooks/use-voice-input';
+import { useState } from 'react';
+
+function MultiLanguageVoice() {
+  const [language, setLanguage] = useState('es-ES');
+  const [input, setInput] = useState('');
+
+  const { isListening, toggleListening, mode } = useVoiceInput({
+    onTranscript: (text) => setInput(text),
+    language
+  });
+
+  return (
+    <div>
+      <select 
+        value={language} 
+        onChange={(e) => setLanguage(e.target.value)}
+        disabled={isListening}
+      >
+        <option value="es-ES">Español (ES)</option>
+        <option value="en-US">English (US)</option>
+        <option value="fr-FR">Français</option>
+        <option value="de-DE">Deutsch</option>
+        <option value="it-IT">Italiano</option>
+        <option value="pt-BR">Português (BR)</option>
+      </select>
+
+      <button onClick={toggleListening}>
+        {isListening ? 'Stop' : 'Start'} ({mode})
+      </button>
+
+      <textarea value={input} onChange={(e) => setInput(e.target.value)} />
+    </div>
+  );
+}
+```
+
+## Browser Compatibility
+
+### Gemini Mode (MediaRecorder)
+
+- ✅ Chrome 49+
+- ✅ Firefox 25+
+- ✅ Safari 14.1+
+- ✅ Edge 79+
+
+### Native Mode (Web Speech API)
+
+- ✅ Chrome 25+
+- ✅ Edge 79+
+- ⚠️ Safari (limited support)
+- ❌ Firefox (no support)
+
+<Note>
+The hook automatically detects capabilities and chooses the best available mode for each browser.
+</Note>
+
+## Configuration
+
+### Audio Format Detection
+
+The hook automatically detects the best supported audio format:
+
+1. **webm with opus** (preferred) - Best compression and quality
+2. **webm with mp3** - Fallback for Safari
+3. **audio/webm** - Generic fallback
+
+### Timeout Settings
+
+The hook handles various timeout scenarios:
+
+- Auto-cancel after network timeout
+- Graceful degradation on API errors
+- Automatic cleanup on component unmount
+
+## Advanced Features
+
+### Voice Command Integration
+
+Combine with voice command parsing:
+
+```tsx
+import { useVoiceInput } from '@/app/hooks/use-voice-input';
+import { executeVoiceCommand } from '@/app/actions';
+
+function VoiceCommands() {
+  const { toggleListening, isListening } = useVoiceInput({
+    onTranscript: async (text) => {
+      // Parse voice command
+      const result = await executeVoiceCommand(text);
+      
+      if (result.success && result.command) {
+        console.log('Command:', result.command);
+        // Execute command...
+      }
+    },
+    language: 'es-ES'
+  });
+
+  return (
+    <button onClick={toggleListening}>
+      {isListening ? 'Listening...' : 'Speak Command'}
+    </button>
+  );
+}
+```
+
+## Related Hooks
+
+<CardGroup cols={2}>
+  <Card title="useVoiceCommandFlow" icon="route" href="#voice-command-flow">
+    Complete voice command workflow with confirmation
+  </Card>
+  <Card title="useChatSubmit" icon="message" href="/components/hooks/use-chat">
+    Integrate voice input with chat submissions
+  </Card>
+</CardGroup>
+
+## Source Code
+
+Location: `app/hooks/use-voice-input.ts:201`

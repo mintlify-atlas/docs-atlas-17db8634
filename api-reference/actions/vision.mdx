@@ -1,0 +1,182 @@
+---
+title: 'Vision Actions'
+description: 'Server actions for image analysis using AI vision models'
+---
+
+## Overview
+
+The Vision Actions module provides AI-powered image analysis for industrial parts and equipment using Google's Gemini Vision model. It identifies, classifies, and evaluates the physical condition of items in images.
+
+## analyzePartImage
+
+Analyzes an image of an industrial part or equipment using Gemini Vision to extract structured information including type, condition, brand, model, and recommendations.
+
+```typescript
+export async function analyzePartImage(
+  formData: FormData
+): Promise<{ 
+  result: PartAnalysisResult | null; 
+  success: boolean; 
+  error?: string 
+}>
+```
+
+### Parameters
+
+<ParamField path="formData" type="FormData" required>
+  Form data containing the image file and optional prompt
+  
+  <ParamField path="formData.file" type="File" required>
+    Image file to analyze (JPG, PNG, etc.)
+  </ParamField>
+  
+  <ParamField path="formData.prompt" type="string">
+    Custom analysis prompt (defaults to `INVENTORY_PROMPT`)
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="result" type="PartAnalysisResult | null">
+  Structured analysis result from the AI model
+</ResponseField>
+
+<ResponseField name="success" type="boolean">
+  Whether the analysis succeeded
+</ResponseField>
+
+<ResponseField name="error" type="string" optional>
+  Error message if analysis failed
+</ResponseField>
+
+### PartAnalysisResult Schema
+
+<ResponseField name="tipo_articulo" type="'mobiliario' | 'equipo'">
+  General classification of the item
+</ResponseField>
+
+<ResponseField name="codigo" type="string" optional>
+  Visible identification code on the part
+</ResponseField>
+
+<ResponseField name="descripcion" type="string">
+  Detailed description of the part or equipment
+</ResponseField>
+
+<ResponseField name="marca" type="string" optional>
+  Manufacturer brand if visible
+</ResponseField>
+
+<ResponseField name="modelo" type="string" optional>
+  Equipment model if visible
+</ResponseField>
+
+<ResponseField name="cantidad_detectada" type="number">
+  Number of parts of this type detected in the image
+</ResponseField>
+
+<ResponseField name="estado_fisico" type="'nuevo' | 'usado' | 'dañado' | 'requiere_inspeccion'">
+  Visual condition of the part
+</ResponseField>
+
+<ResponseField name="recomendacion" type="string">
+  Brief recommendation for handling or maintenance
+</ResponseField>
+
+<ResponseField name="nivel_confianza" type="'alta' | 'media' | 'baja'">
+  AI's confidence level in the identification
+</ResponseField>
+
+### Features
+
+- **Size Validation**: Enforces maximum image size (configured in `MAX_IMAGE_SIZE_MB`)
+- **Structured Output**: Uses Zod schema validation for consistent results
+- **Low Temperature**: Uses temperature 0.1 for strict schema adherence
+- **Detailed Analysis**: Extracts multiple attributes including condition and recommendations
+
+### Example
+
+```typescript
+const formData = new FormData();
+formData.append('file', imageFile);
+formData.append('prompt', 'Analiza esta pieza y determina si requiere mantenimiento');
+
+const result = await analyzePartImage(formData);
+
+if (result.success && result.result) {
+  const part = result.result;
+  console.log(`Tipo: ${part.tipo_articulo}`);
+  console.log(`Descripción: ${part.descripcion}`);
+  console.log(`Estado: ${part.estado_fisico}`);
+  console.log(`Cantidad: ${part.cantidad_detectada}`);
+  console.log(`Confianza: ${part.nivel_confianza}`);
+  
+  if (part.marca) console.log(`Marca: ${part.marca}`);
+  if (part.modelo) console.log(`Modelo: ${part.modelo}`);
+  if (part.codigo) console.log(`Código: ${part.codigo}`);
+  
+  console.log(`Recomendación: ${part.recomendacion}`);
+} else {
+  console.error("Error:", result.error);
+}
+```
+
+### Example Response
+
+```json
+{
+  "result": {
+    "tipo_articulo": "equipo",
+    "codigo": "EQ-2024-1523",
+    "descripcion": "Compresor de aire industrial marca Atlas Copco",
+    "marca": "Atlas Copco",
+    "modelo": "GA 55",
+    "cantidad_detectada": 1,
+    "estado_fisico": "usado",
+    "recomendacion": "Verificar filtros y nivel de aceite. Programar mantenimiento preventivo",
+    "nivel_confianza": "alta"
+  },
+  "success": true
+}
+```
+
+---
+
+## Configuration
+
+### Environment Variables
+
+- `GOOGLE_GENERATIVE_AI_API_KEY`: Required for vision analysis
+- `MAX_IMAGE_SIZE_MB`: Maximum image file size (defined in `config/limits`)
+
+### Constants
+
+- `INVENTORY_PROMPT`: Default prompt for inventory analysis (defined in `config`)
+
+### Model Configuration
+
+- **Model**: `gemini-2.5-flash`
+- **Temperature**: 0.1 (low temperature for consistent structured output)
+- **Schema**: Zod validation for type-safe results
+
+### Supported Image Formats
+
+The function accepts standard image formats including:
+- JPEG/JPG
+- PNG
+- WebP
+- GIF
+
+### Size Limits
+
+Images are validated against `MAX_IMAGE_SIZE_MB` before processing. Large images are rejected with a descriptive error message.
+
+---
+
+## Use Cases
+
+1. **Inventory Management**: Automatically catalog parts with descriptions and codes
+2. **Quality Inspection**: Assess physical condition of equipment
+3. **Maintenance Planning**: Get AI-powered recommendations for part handling
+4. **Asset Tracking**: Detect quantities and identify brands/models
+5. **Documentation**: Generate structured records from visual inspections

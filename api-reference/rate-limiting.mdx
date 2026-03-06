@@ -1,0 +1,274 @@
+---
+title: 'Rate Limiting'
+description: 'Understand how API rate limiting works to prevent abuse and ensure fair usage'
+---
+
+## Overview
+
+The Gima AI Chatbot implements in-memory rate limiting using a sliding window algorithm to prevent API abuse and ensure fair resource distribution across all users.
+
+## Rate Limit Configuration
+
+<ParamField path="windowMs" type="number" default="60000">
+  Time window in milliseconds. Default: **60,000 ms (1 minute)**
+</ParamField>
+
+<ParamField path="maxRequests" type="number" default="20">
+  Maximum requests allowed per window. Default: **20 requests per minute**
+</ParamField>
+
+## How It Works
+
+### Sliding Window Algorithm
+
+The rate limiter uses a **sliding window** approach:
+
+1. Each request from a client IP is timestamped
+2. Before processing a new request, old timestamps outside the current window are removed
+3. If the count of valid timestamps exceeds the limit, the request is rejected
+4. Otherwise, the current timestamp is added and the request proceeds
+
+### Example Timeline
+
+```
+Time: 0s  - Request 1 ✅ (1/20)
+Time: 5s  - Request 2 ✅ (2/20)
+Time: 10s - Request 3 ✅ (3/20)
+...
+Time: 50s - Request 20 ✅ (20/20)
+Time: 55s - Request 21 ❌ (Rate limit exceeded)
+Time: 61s - Request 22 ✅ (1/20) - First request expired
+```
+
+## Rate Limit Responses
+
+### When Limit is Exceeded
+
+Clients receive a **429 Too Many Requests** response:
+
+```json
+{
+  "error": "Too Many Requests",
+  "message": "Has excedido el límite de solicitudes. Intenta nuevamente en unos segundos.",
+  "retryAfter": 30
+}
+```
+
+### Response Headers
+
+<ResponseField name="Retry-After" type="string">
+  Number of seconds to wait before retrying. Based on when the oldest request in the current window will expire.
+</ResponseField>
+
+<ResponseField name="X-RateLimit-Remaining" type="string">
+  Number of requests remaining in the current window. Set to `"0"` when limit is exceeded.
+</ResponseField>
+
+## Implementation Details
+
+### Identifier
+
+Rate limiting is applied per **client IP address**, extracted from:
+
+1. `X-Forwarded-For` header (first IP)
+2. `X-Real-IP` header
+3. Socket remote address
+
+In development mode, localhost connections are allowed.
+
+### Memory Management
+
+The rate limiter includes automatic cleanup:
+
+- **Cleanup Interval**: Every 60 seconds
+- **Cleanup Action**: Removes expired timestamps and empty records
+- **Memory Efficiency**: Prevents memory leaks in long-running processes
+
+### Global Instance
+
+A single global rate limiter instance (`chatRateLimiter`) is shared across all chat API requests:
+
+```typescript
+export const chatRateLimiter = new RateLimiter({
+  windowMs: 60 * 1000, // 1 minute
+  maxRequests: 20,     // 20 requests per minute
+});
+```
+
+## Client Best Practices
+
+### 1. Respect Retry-After Header
+
+Always check and honor the `Retry-After` header when receiving a 429 response:
+
+```javascript
+const response = await fetch('/api/chat', {
+  method: 'POST',
+  body: JSON.stringify(payload)
+});
+
+if (response.status === 429) {
+  const data = await response.json();
+  const retryAfter = data.retryAfter || 60;
+  
+  console.log(`Rate limited. Retry in ${retryAfter} seconds`);
+  
+  // Wait before retrying
+  await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+}
+```
+
+### 2. Implement Exponential Backoff
+
+For repeated failures, use exponential backoff:
+
+```javascript
+let retryCount = 0;
+const maxRetries = 3;
+
+while (retryCount < maxRetries) {
+  const response = await fetch('/api/chat', options);
+  
+  if (response.status === 429) {
+    const delay = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s...
+    await new Promise(resolve => setTimeout(resolve, delay));
+    retryCount++;
+  } else {
+    break;
+  }
+}
+```
+
+### 3. Request Batching
+
+Reduce request frequency by batching multiple messages into a single request:
+
+```javascript
+// ❌ Multiple requests
+await fetch('/api/chat', { body: JSON.stringify({ messages: [msg1] }) });
+await fetch('/api/chat', { body: JSON.stringify({ messages: [msg2] }) });
+
+// ✅ Single request with conversation history
+await fetch('/api/chat', { 
+  body: JSON.stringify({ 
+    messages: [msg1, response1, msg2] 
+  }) 
+});
+```
+
+### 4. Monitor Remaining Quota
+
+Implement client-side tracking to avoid hitting limits:
+
+```javascript
+let requestsInWindow = 0;
+const maxRequests = 20;
+const windowMs = 60000;
+
+function canMakeRequest() {
+  if (requestsInWindow >= maxRequests) {
+    console.warn('Approaching rate limit');
+    return false;
+  }
+  return true;
+}
+
+function trackRequest() {
+  requestsInWindow++;
+  setTimeout(() => requestsInWindow--, windowMs);
+}
+```
+
+## Rate Limit Methods
+
+### checkLimit(identifier: string)
+
+Checks if an identifier has exceeded the rate limit.
+
+**Parameters:**
+- `identifier` (string): Usually a client IP address
+
+**Returns:**
+- `true`: Request is within limits
+- `false`: Rate limit exceeded
+
+### getRemaining(identifier: string)
+
+Returns the number of requests remaining in the current window.
+
+**Parameters:**
+- `identifier` (string): Usually a client IP address
+
+**Returns:**
+- `number`: Requests remaining (0 or more)
+
+### getRetryAfter(identifier: string)
+
+Calculates seconds until the next request is allowed.
+
+**Parameters:**
+- `identifier` (string): Usually a client IP address
+
+**Returns:**
+- `number`: Milliseconds until reset (0 if no limit)
+
+## Testing Rate Limits
+
+### Local Testing
+
+To test rate limiting locally:
+
+```bash
+# Send 21 rapid requests (exceeds default 20/min limit)
+for i in {1..21}; do
+  curl -X POST http://localhost:3000/api/chat \
+    -H "Content-Type: application/json" \
+    -d '{"messages": [{"role": "user", "content": "Test '$i'"}]}' &
+done
+wait
+```
+
+The 21st request should return a 429 error.
+
+### Custom Rate Limits
+
+For testing or special use cases, you can create a custom rate limiter:
+
+```typescript
+import { RateLimiter } from '@/app/lib/rate-limiter';
+
+const customLimiter = new RateLimiter({
+  windowMs: 30 * 1000,  // 30 seconds
+  maxRequests: 5,       // 5 requests
+});
+```
+
+## Production Considerations
+
+### Distributed Systems
+
+The current implementation uses **in-memory storage**, which has limitations:
+
+- ⚠️ **Not shared across multiple servers**: Each instance maintains separate counters
+- ⚠️ **Lost on restart**: Rate limit data is not persisted
+
+For production deployments with multiple instances, consider:
+
+- **Redis-based rate limiting**: Shared state across all servers
+- **API Gateway rate limiting**: Cloudflare, AWS API Gateway, or Kong
+- **Edge middleware**: Vercel Edge Functions or Cloudflare Workers
+
+### Monitoring
+
+Track rate limit metrics:
+
+- Number of 429 responses per hour
+- Most frequently rate-limited IPs
+- Average retry-after duration
+- Rate limit hit rate percentage
+
+## Related Resources
+
+- [POST /api/chat](/api-reference/chat) - Main chat endpoint documentation
+- [Configuration](/guides/configuration) - Configure rate limiting and timeouts
+- [Testing](/guides/testing) - Test rate limiting behavior

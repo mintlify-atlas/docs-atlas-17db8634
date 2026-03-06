@@ -1,0 +1,214 @@
+---
+title: 'File Actions'
+description: 'Server actions for PDF document analysis'
+---
+
+## Overview
+
+The File Actions module provides AI-powered document processing capabilities, specifically for analyzing PDF files using Google's Gemini model. It can read, understand, and summarize PDF content.
+
+## analyzePdf
+
+Analyzes a PDF document using Gemini AI to extract insights, summarize content, or answer specific questions about the document.
+
+```typescript
+export async function analyzePdf(
+  formData: FormData
+): Promise<{ text: string; success: boolean; error?: string }>
+```
+
+### Parameters
+
+<ParamField path="formData" type="FormData" required>
+  Form data containing the PDF file and optional analysis prompt
+  
+  <ParamField path="formData.file" type="File" required>
+    PDF file to analyze
+  </ParamField>
+  
+  <ParamField path="formData.prompt" type="string">
+    Custom analysis prompt. If not provided, defaults to: "Analiza este documento PDF y resume sus puntos clave."
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="text" type="string">
+  AI-generated analysis or summary of the PDF content
+</ResponseField>
+
+<ResponseField name="success" type="boolean">
+  Whether the analysis succeeded
+</ResponseField>
+
+<ResponseField name="error" type="string" optional>
+  Error message if analysis failed
+</ResponseField>
+
+### Features
+
+- **Large Document Support**: Uses Gemini 2.5 Flash which supports up to 1M tokens
+- **Size Validation**: Enforces maximum PDF size (configured in `MAX_PDF_SIZE_MB`)
+- **Custom Prompts**: Flexible prompt system for different analysis needs
+- **Base64 Processing**: Handles PDF conversion internally
+
+### Example: Basic Summary
+
+```typescript
+const formData = new FormData();
+formData.append('file', pdfFile);
+
+const result = await analyzePdf(formData);
+
+if (result.success) {
+  console.log("Summary:", result.text);
+} else {
+  console.error("Error:", result.error);
+}
+```
+
+### Example: Custom Analysis
+
+```typescript
+const formData = new FormData();
+formData.append('file', technicalManualPdf);
+formData.append('prompt', 'Extrae todos los procedimientos de mantenimiento y sus frecuencias recomendadas');
+
+const result = await analyzePdf(formData);
+
+if (result.success) {
+  console.log("Maintenance Procedures:\n", result.text);
+}
+```
+
+### Example: Question Answering
+
+```typescript
+const formData = new FormData();
+formData.append('file', contractPdf);
+formData.append('prompt', '¿Cuáles son las cláusulas de garantía y cuál es el período de cobertura?');
+
+const result = await analyzePdf(formData);
+
+if (result.success) {
+  console.log("Warranty Information:\n", result.text);
+}
+```
+
+### Example: Data Extraction
+
+```typescript
+const formData = new FormData();
+formData.append('file', invoicePdf);
+formData.append('prompt', 'Extrae los siguientes datos en formato JSON: número de factura, fecha, total, conceptos');
+
+const result = await analyzePdf(formData);
+
+if (result.success) {
+  try {
+    const invoiceData = JSON.parse(result.text);
+    console.log("Invoice Number:", invoiceData.numero_factura);
+    console.log("Total:", invoiceData.total);
+  } catch (e) {
+    console.log("Raw extraction:", result.text);
+  }
+}
+```
+
+---
+
+## Use Cases
+
+### 1. Document Summarization
+```typescript
+formData.append('prompt', 'Resume este documento en 3 párrafos destacando los puntos más importantes');
+```
+
+### 2. Technical Manual Processing
+```typescript
+formData.append('prompt', 'Lista todas las especificaciones técnicas y requisitos de instalación');
+```
+
+### 3. Compliance Review
+```typescript
+formData.append('prompt', 'Identifica todas las menciones de normativas y certificaciones en este documento');
+```
+
+### 4. Key Information Extraction
+```typescript
+formData.append('prompt', 'Extrae fechas importantes, nombres de personas, y montos mencionados');
+```
+
+### 5. Comparative Analysis
+```typescript
+// Note: For comparing multiple PDFs, call analyzePdf multiple times
+formData.append('prompt', 'Analiza este contrato e identifica cláusulas que requieran atención legal');
+```
+
+---
+
+## Configuration
+
+### Environment Variables
+
+- `GOOGLE_GENERATIVE_AI_API_KEY`: Required for PDF analysis
+- `MAX_PDF_SIZE_MB`: Maximum PDF file size (defined in `config/limits`)
+
+### Model Configuration
+
+- **Model**: `gemini-2.5-flash`
+- **Context Window**: Up to 1M tokens (ideal for large documents)
+- **Input**: PDF files via base64 encoding
+
+### Size Limits
+
+PDFs are validated against `MAX_PDF_SIZE_MB` before processing. Files exceeding this limit are rejected with a descriptive error:
+
+```json
+{
+  "text": "",
+  "success": false,
+  "error": "PDF demasiado grande (25.3MB). Máximo permitido: 20MB"
+}
+```
+
+---
+
+## Error Handling
+
+The function includes comprehensive error handling:
+
+### Common Errors
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| "PDF vacío" | No file provided in FormData | Ensure 'file' field contains a valid PDF |
+| "PDF demasiado grande" | File exceeds size limit | Compress PDF or split into smaller files |
+| "Error desconocido al analizar PDF" | API error or network issue | Check API key and network connectivity |
+
+### Error Response Example
+
+```json
+{
+  "text": "",
+  "success": false,
+  "error": "PDF demasiado grande (15.2MB). Máximo permitido: 10MB"
+}
+```
+
+---
+
+## Performance Considerations
+
+- **Token Limit**: Gemini 2.5 Flash supports up to 1M tokens, suitable for documents of 500+ pages
+- **Processing Time**: Large PDFs may take 10-30 seconds to process
+- **Memory**: PDFs are loaded into memory as base64, factor this into server resources
+- **Rate Limits**: Subject to Google AI API rate limits
+
+### Best Practices
+
+1. **Prompt Design**: Be specific in your prompts for better results
+2. **File Size**: Keep PDFs under the configured limit for optimal performance
+3. **Error Handling**: Always check the `success` field before using `text`
+4. **Structured Data**: Request JSON format in prompt when extracting structured data
+5. **Language**: Prompts can be in Spanish or English; responses match prompt language
